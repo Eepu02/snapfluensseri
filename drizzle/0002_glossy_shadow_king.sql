@@ -1,0 +1,1 @@
+ALTER TABLE `group_members` ADD `snap_count` integer DEFAULT 0 NOT NULL;

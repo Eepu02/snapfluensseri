@@ -1,21 +1,28 @@
 {
-	"name": "my-first-worker",
+	"name": "snapfluensseri",
 	"version": "0.0.0",
 	"private": true,
+	"type": "module",
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev --test-scheduled",
 		"start": "wrangler dev --test-scheduled",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate:local": "wrangler d1 migrations apply snapfluencer --local",
+		"db:migrate:remote": "wrangler d1 migrations apply snapfluencer --remote"
 	},
 	"devDependencies": {
-		"prisma": "^7.2.0",
-		"typescript": "^5.5.2",
-		"wrangler": "^4.57.0"
+		"@biomejs/biome": "2.3.11",
+		"@types/node": "25.0.3",
+		"dotenv": "17.2.3",
+		"drizzle-kit": "0.31.8",
+		"typescript": "5.9.3",
+		"wrangler": "4.57.0"
 	},
 	"dependencies": {
-		"@prisma/adapter-d1": "^7.2.0",
-		"@prisma/client": "^7.2.0",
-		"cron-parser": "^5.4.0"
+		"cron-parser": "5.4.0",
+		"drizzle-orm": "0.45.1",
+		"telegraf": "4.16.3"
 	}
 }
