@@ -413,6 +413,50 @@ async function setupBot(env: Env) {
 				`/snapfluencer - Pick now`,
 		);
 	});
+	// Intentionally not in help menu
+	bot.command("onnea", async (ctx) => {
+		if (!ctx.chat || ctx.chat.type === "private") {
+			return;
+		}
+		const chatId = ctx.chat.id;
+		const rows = await db
+			.select()
+			.from(groups)
+			.where(eq(groups.chatId, chatId))
+			.limit(1);
+		if (rows.length === 0) {
+			console.error("Group not found for /onnea command");
+			return;
+		}
+
+		const group = rows.at(0);
+		const lastPicked = group!.lastPickedUserId;
+
+		if (!lastPicked) {
+			return;
+		}
+
+		const user = await db
+			.select()
+			.from(groupMembers)
+			.where(
+				and(
+					eq(groupMembers.chatId, chatId),
+					eq(groupMembers.userId, lastPicked),
+				),
+			)
+			.limit(1);
+
+		if (user.length === 0) {
+			console.error("User not found for /onnea command");
+			return;
+		}
+
+		await db
+			.update(groupMembers)
+			.set({ congratulationsCount: user.at(0)!.congratulationsCount + 1 })
+			.where(eq(groupMembers.userId, lastPicked));
+	});
 
 	/**
 	 * Track seen users on any message

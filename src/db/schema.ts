@@ -35,6 +35,7 @@ export const groupMembers = sqliteTable(
 		firstName: text("first_name"),
 		lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
 		snapCount: integer("snap_count").notNull().default(0),
+		congratulationsCount: integer("congratulations_count").notNull().default(0),
 
 		isOptedIn: integer("is_opted_in", { mode: "boolean" })
 			.notNull()

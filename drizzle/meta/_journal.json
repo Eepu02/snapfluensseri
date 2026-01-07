@@ -22,6 +22,13 @@
       "when": 1767815583268,
       "tag": "0002_glossy_shadow_king",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1767817833491,
+      "tag": "0003_steep_puff_adder",
+      "breakpoints": true
     }
   ]
 }
