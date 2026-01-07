@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum ScheduleType {
+  interval  // "every N seconds"
+  cron      // cron expression stored, and you compute nextRunAt
+}
+
+model Group {
+  chatId BigInt @id /// Telegram group/supergroup chat id
+  isActive Boolean @default(false)
+  scheduleType  ScheduleType @default(interval)  /// For interval: store seconds as string (e.g. "259200")
+  scheduleValue String       @default("259200")   /// For cron: store cron expression (e.g. "0 9 */3 * *")
+  nextRunAt DateTime? /// When the next snapfluencer message should be sent
+  lastPickedUserId BigInt?   /// Last picked user to optionally avoid repeats
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  timezone String @default("UTC")
+
+  members GroupMember[]
+}
+
+model GroupMember {
+  chatId BigInt
+  userId BigInt
+  username  String?
+  firstName String?
+  lastSeenAt DateTime?
+  isOptedIn  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation(fields: [chatId], references: [chatId], onDelete: Cascade)
+
+  @@id([chatId, userId])
+  @@index([chatId, isOptedIn])
+}

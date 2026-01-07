@@ -1,0 +1,21 @@
+{
+	"name": "my-first-worker",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev --test-scheduled",
+		"start": "wrangler dev --test-scheduled",
+		"cf-typegen": "wrangler types"
+	},
+	"devDependencies": {
+		"prisma": "^7.2.0",
+		"typescript": "^5.5.2",
+		"wrangler": "^4.57.0"
+	},
+	"dependencies": {
+		"@prisma/adapter-d1": "^7.2.0",
+		"@prisma/client": "^7.2.0",
+		"cron-parser": "^5.4.0"
+	}
+}
