@@ -1,6 +1,6 @@
 import { CronExpressionParser } from "cron-parser";
 import { and, eq, lte } from "drizzle-orm";
-import { Telegraf } from "telegraf";
+import { Telegraf, TelegramError } from "telegraf";
 import { type Env, getDb } from "../db/client";
 import { groupMembers, groups } from "../db/schema";
 import { pickRandom } from "./random";
@@ -156,6 +156,16 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 					`[Cron] Error sending message to group ${group.chatId}:`,
 					err,
 				);
+				if (err instanceof TelegramError) {
+					if (err.code === 403) {
+						// Bot was removed from the group, delete the group
+						await db.delete(groups).where(eq(groups.chatId, group.chatId));
+						console.log(
+							`[Cron] Bot removed from group ${group.chatId}, deleted group from database`,
+						);
+						continue;
+					}
+				}
 			}
 
 			// Advance schedule

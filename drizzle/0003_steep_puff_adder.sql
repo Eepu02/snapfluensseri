@@ -1,1 +1,0 @@
-ALTER TABLE `group_members` ADD `congratulations_count` integer DEFAULT 0 NOT NULL;

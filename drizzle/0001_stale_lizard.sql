@@ -1,1 +1,0 @@
-ALTER TABLE `groups` ADD `draw_mode` text DEFAULT 'random' NOT NULL;

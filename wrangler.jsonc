@@ -22,7 +22,7 @@
 		{
 			"binding": "snapfluencer",
 			"database_name": "snapfluencer",
-			"database_id": "b21b16e4-7bcf-4c8b-b105-c637dc2e23ef",
+			"database_id": "7e5d3ee1-3923-4d58-a106-090e3d7556bd",
 			"migrations_dir": "drizzle",
 			"remote": true
 		}

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "81e54b2b-95ed-4e7f-9d6c-3eb328166bf0",
+  "id": "4e9642cf-0398-4d78-a59f-e6a36a057019",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "group_members": {
@@ -42,6 +42,22 @@
           "notNull": false,
           "autoincrement": false
         },
+        "snap_count": {
+          "name": "snap_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "congratulations_count": {
+          "name": "congratulations_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "is_opted_in": {
           "name": "is_opted_in",
           "type": "integer",
@@ -77,7 +93,21 @@
           "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "group_members_chat_id_groups_chat_id_fk": {
+          "name": "group_members_chat_id_groups_chat_id_fk",
+          "tableFrom": "group_members",
+          "tableTo": "groups",
+          "columnsFrom": [
+            "chat_id"
+          ],
+          "columnsTo": [
+            "chat_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
         "group_members_chat_id_user_id_pk": {
           "columns": [
@@ -145,6 +175,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "draw_mode": {
+          "name": "draw_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'random'"
         },
         "created_at": {
           "name": "created_at",

@@ -321,10 +321,15 @@ async function setupBot(env: Env) {
 				and(eq(groupMembers.chatId, chatId), eq(groupMembers.isOptedIn, true)),
 			);
 
+		const humanizedScheduleValue =
+			groupData.scheduleType === "interval"
+				? humanizeSeconds(parseInt(groupData.scheduleValue, 10))
+				: `${groupData.scheduleValue}s`;
+
 		const status = groupData.isActive ? "✅ Active" : "❌ Inactive";
 		const schedule =
 			groupData.scheduleType === "interval"
-				? `Every ${groupData.scheduleValue}s`
+				? `Every ${humanizedScheduleValue}`
 				: `Cron: ${groupData.scheduleValue}`;
 		const nextRun = groupData.nextRunAt
 			? formatInTz(groupData.nextRunAt, groupData.timezone)

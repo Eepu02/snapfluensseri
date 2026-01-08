@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+	foreignKey,
 	index,
 	integer,
 	primaryKey,
@@ -55,5 +56,10 @@ export const groupMembers = sqliteTable(
 			t.chatId,
 			t.isOptedIn,
 		),
+
+		fkGroup: foreignKey({
+			columns: [t.chatId],
+			foreignColumns: [groups.chatId],
+		}).onDelete("cascade"),
 	}),
 );
