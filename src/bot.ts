@@ -403,12 +403,16 @@ async function setupBot(env: Env) {
 			.where(eq(groups.chatId, chatId));
 	});
 
-	bot.command("help", async (ctx) => {
+	bot.start(async (ctx) => {
+		await ctx.reply(`Use /help to see available commands.`);
+	});
+
+	bot.help(async (ctx) => {
 		await ctx.reply(
 			`Commands:\n` +
 				`/activate - Activate Snapfluencer in this group\n` +
 				`/deactivate - Deactivate Snapfluencer\n` +
-				`/schedule every <seconds> - Set interval (e.g., every 3 days)\n` +
+				`/schedule every <amount> <units> - Set interval (e.g., every 3 days)\n` +
 				`/schedule cron <expression> - Set cron (e.g., cron 0 9 */3 * *)\n` +
 				`/timezone <tz> - Set timezone for cron (e.g., Europe/Helsinki)\n` +
 				`/mode random|double - Set draw mode\n` +
