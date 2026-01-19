@@ -1,19 +1,16 @@
 import { CronExpressionParser } from "cron-parser";
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 import { Telegraf, TelegramError } from "telegraf";
 import { type Env, getDb } from "../db/client";
 import { groupMembers, groups } from "../db/schema";
 import { pickRandom } from "./random";
-import { getNextRunAt } from "./schedule";
-import { formatMention } from "./telegram";
+import { escapeHTML, formatMention } from "./telegram";
 
 export function computeNextRunAt(
 	cronExpr: string,
 	timezone: string,
-	from: Date = new Date(),
+	from: Date,
 ): Date {
-	// Telegram users will usually provide 5-field cron: "m h dom mon dow"
-	// cron-parser supports that.
 	const it = CronExpressionParser.parse(cronExpr, {
 		currentDate: from,
 		tz: timezone,
@@ -24,19 +21,18 @@ export function computeNextRunAt(
 export async function runCron(env: Env, scheduledTimeMs: number) {
 	const db = getDb(env);
 	const bot = new Telegraf(env.BOT_TOKEN);
+	const anchorTime = new Date(scheduledTimeMs);
 
 	try {
-		// Fetch due groups
-		const now = new Date(scheduledTimeMs);
 		const dueGroups = await db
 			.select()
 			.from(groups)
-			.where(and(eq(groups.isActive, true), lte(groups.nextRunAt, now)));
+			.where(and(eq(groups.isActive, true), lte(groups.nextRunAt, anchorTime)));
 
 		console.log(`[Cron] Found ${dueGroups.length} due groups`);
 
 		for (const group of dueGroups) {
-			// Get eligible members
+			// 1. Get eligible members
 			const members = await db
 				.select()
 				.from(groupMembers)
@@ -47,77 +43,42 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 					),
 				);
 
+			// Helper to calculate next run using the anchor time to prevent drift
+			const getNextSchedule = () =>
+				computeNextRunAt(group.scheduleValue, group.timezone, anchorTime);
+
 			if (members.length === 0) {
-				// No eligible members, just advance nextRunAt
-				const nextRunAt = getNextRunAt(
-					group.scheduleType as "interval" | "cron",
-					group.scheduleValue,
-					group.timezone,
-				);
 				await db
 					.update(groups)
-					.set({ nextRunAt })
+					.set({ nextRunAt: getNextSchedule() })
 					.where(eq(groups.chatId, group.chatId));
-				console.log(
-					`[Cron] Group ${group.chatId}: no members, advanced schedule`,
-				);
 				continue;
 			}
 
-			// Pick a random member, excluding last picked unless only one member
-			const lastPickedIndex = members.findIndex(
-				(m) => m.userId === group.lastPickedUserId,
+			// 2. Selection Logic
+			const picked = pickRandom(
+				members,
+				group.lastPickedUserId ? [group.lastPickedUserId] : [],
 			);
-			const picked =
-				members.length > 1
-					? pickRandom(
-							members,
-							lastPickedIndex >= 0 ? [lastPickedIndex] : undefined,
-						)
-					: members.at(0);
-			let secondPick = null;
-			if (Math.random() < 0.1) {
-				// 10% chance for double pick
-				secondPick =
-					members.length > 2
-						? pickRandom(members, [
-								...(lastPickedIndex >= 0 ? [lastPickedIndex] : []),
-								...(picked ? [members.indexOf(picked)] : []),
-							])
-						: members.find((m) => m.userId !== picked?.userId) || null;
-			}
 
 			if (!picked) {
-				const nextRunAt = getNextRunAt(
-					group.scheduleType as "interval" | "cron",
-					group.scheduleValue,
-					group.timezone,
-				);
 				await db
 					.update(groups)
-					.set({ nextRunAt })
+					.set({ nextRunAt: getNextSchedule() })
 					.where(eq(groups.chatId, group.chatId));
-				console.log(
-					`[Cron] Group ${group.chatId}: could not pick, advanced schedule`,
-				);
 				continue;
 			}
 
-			// Send message
-			const mention = formatMention(
-				picked.userId,
-				picked.username,
-				picked.firstName,
-			);
+			let secondPick = null;
+			if (Math.random() < 0.1 && members.length > 1) {
+				// Exclude both the current primary pick AND the previous run's winner
+				secondPick = pickRandom(
+					members,
+					[picked.userId, group.lastPickedUserId].filter((u) => u !== null),
+				);
+			}
 
-			const secondMention = secondPick
-				? formatMention(
-						secondPick.userId,
-						secondPick.username,
-						secondPick.firstName,
-					)
-				: null;
-
+			// 3. Prepare Message (with HTML escaping)
 			const titles = [
 				"👻 Snapfluencer",
 				"🔥 Main Character",
@@ -140,80 +101,55 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 
 			const title = titles[Math.floor(Math.random() * titles.length)];
 
-			let msgText = "";
-			if (secondPick) {
-				msgText = `Double Trouble! New ${title}s are ${mention} and ${secondMention}!`;
-			} else {
-				msgText = `New ${title} is ${mention}!`;
-			}
+			const mention1 = formatMention(
+				picked.userId,
+				escapeHTML(picked.username ?? undefined),
+				escapeHTML(picked.firstName ?? undefined),
+			);
 
+			const msgText = secondPick
+				? `Double Trouble! New ${title}s are ${mention1} and ${formatMention(secondPick.userId, escapeHTML(secondPick.username ?? undefined), escapeHTML(secondPick.firstName ?? undefined))}!`
+				: `New ${title} is ${mention1}!`;
+
+			// 4. Send Message with Error Handling
 			try {
 				await bot.telegram.sendMessage(group.chatId, msgText, {
 					parse_mode: "HTML",
 				});
 			} catch (err) {
-				console.error(
-					`[Cron] Error sending message to group ${group.chatId}:`,
-					err,
-				);
-				if (err instanceof TelegramError) {
-					if (err.code === 403) {
-						// Bot was removed from the group, delete the group
-						await db.delete(groups).where(eq(groups.chatId, group.chatId));
-						console.log(
-							`[Cron] Bot removed from group ${group.chatId}, deleted group from database`,
-						);
-						continue;
-					}
+				if (err instanceof TelegramError && err.code === 403) {
+					await db.delete(groups).where(eq(groups.chatId, group.chatId));
+					continue;
 				}
+				console.error(`[Cron] Send failed for ${group.chatId}:`, err);
 			}
 
-			// Advance schedule
-			const nextRunAt = getNextRunAt(
-				group.scheduleType as "interval" | "cron",
-				group.scheduleValue,
-				group.timezone,
-			);
-
-			await db
-				.update(groupMembers)
-				.set({
-					snapCount: picked.snapCount + 1,
-				})
-				.where(
-					and(
-						eq(groupMembers.chatId, group.chatId),
-						eq(groupMembers.userId, picked.userId),
-					),
-				);
-
-			if (secondPick) {
-				await db
+			// 5. Atomic Updates
+			// Increment snapCount directly in SQL to avoid race conditions
+			const increment = (uid: number) =>
+				db
 					.update(groupMembers)
-					.set({
-						snapCount: secondPick.snapCount + 1,
-					})
+					.set({ snapCount: sql`${groupMembers.snapCount} + 1` })
 					.where(
 						and(
 							eq(groupMembers.chatId, group.chatId),
-							eq(groupMembers.userId, secondPick.userId),
+							eq(groupMembers.userId, uid),
 						),
 					);
-			}
 
+			await increment(picked.userId);
+			if (secondPick) await increment(secondPick.userId);
+
+			// Update group state (using anchorTime to calculate next run)
 			await db
 				.update(groups)
 				.set({
 					lastPickedUserId: picked.userId,
-					nextRunAt,
+					nextRunAt: getNextSchedule(),
 				})
 				.where(eq(groups.chatId, group.chatId));
-
-			console.log(
-				`[Cron] Group ${group.chatId}: picked user ${picked.userId}, next run at ${nextRunAt}`,
-			);
 		}
 	} catch (err) {
-		console.error("[Cron] Error:", err);
+		console.error("[Cron] Critical Error:", err);
 	}
 }

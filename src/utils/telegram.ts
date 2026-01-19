@@ -16,11 +16,17 @@ export function formatMention(
 }
 
 /**
- * Escape HTML for Telegram messages
+ * Safely escapes strings for Telegram's HTML parse mode.
  */
-export function escapeHtml(text: string): string {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
-}
+export const escapeHTML = (str: string = "") =>
+	str.replace(
+		/[&<>"']/g,
+		(m) =>
+			({
+				"&": "&amp;",
+				"<": "&lt;",
+				">": "&gt;",
+				'"': "&quot;",
+				"'": "&#39;",
+			})[m] || m,
+	);
