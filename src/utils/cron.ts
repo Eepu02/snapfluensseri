@@ -70,7 +70,9 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 			}
 
 			let secondPick = null;
-			if (Math.random() < 0.1 && members.length > 1) {
+			const doubleDraw = group.drawMode === "double";
+			const roll = Math.random() < 0.1;
+			if (doubleDraw && roll && members.length > 1) {
 				// Exclude both the current primary pick AND the previous run's winner
 				secondPick = pickRandom(
 					members,
