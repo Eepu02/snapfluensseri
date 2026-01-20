@@ -11,3 +11,5 @@ export interface Env {
 export function getDb(env: Env): DrizzleD1Database<typeof schema> {
 	return drizzle(env.snapfluencer, { schema });
 }
+
+export type DB = ReturnType<typeof getDb>;

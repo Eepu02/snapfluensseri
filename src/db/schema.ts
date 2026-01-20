@@ -7,6 +7,8 @@ import {
 	sqliteTable,
 	text,
 } from "drizzle-orm/sqlite-core";
+import { createSelectSchema } from "drizzle-zod";
+import { z } from "zod";
 
 export const groups = sqliteTable("groups", {
 	chatId: integer("chat_id").primaryKey().notNull(),
@@ -63,3 +65,15 @@ export const groupMembers = sqliteTable(
 		}).onDelete("cascade"),
 	}),
 );
+
+export const drawModeModel = z.enum(["random", "double"]);
+export type DrawMode = z.infer<typeof drawModeModel>;
+
+export const groupSelectModel = createSelectSchema(groups).extend({
+	drawMode: drawModeModel,
+	scheduleType: z.enum(["cron", "interval"]),
+	scheduleValue: z.string(),
+});
+
+export type Group = typeof groups.$inferSelect;
+export type User = typeof groupMembers.$inferInsert;

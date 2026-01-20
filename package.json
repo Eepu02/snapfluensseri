@@ -19,12 +19,14 @@
 		"dotenv": "17.2.3",
 		"drizzle-kit": "0.31.8",
 		"typescript": "5.9.3",
-		"vitest": "^4.0.17",
+		"vitest": "4.0.17",
 		"wrangler": "4.57.0"
 	},
 	"dependencies": {
 		"cron-parser": "5.4.0",
 		"drizzle-orm": "0.45.1",
-		"telegraf": "4.16.3"
+		"drizzle-zod": "0.8.3",
+		"telegraf": "4.16.3",
+		"zod": "4.3.5"
 	}
 }

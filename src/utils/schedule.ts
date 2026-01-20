@@ -1,4 +1,18 @@
-import { computeNextRunAt } from "./cron";
+import { z } from "zod";
+import { computeNextCronRunAt } from "./cron";
+
+export const scheduleModel = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("cron"),
+		value: z.string(),
+	}),
+	z.object({
+		type: z.literal("interval"),
+		value: z.number().int(),
+	}),
+]);
+
+export type Schedule = z.infer<typeof scheduleModel>;
 
 /**
  * Compute the next run time based on schedule type and value.
@@ -8,28 +22,27 @@ import { computeNextRunAt } from "./cron";
  * @param from current time (defaults to now)
  */
 export function getNextRunAt(
-	scheduleType: "interval" | "cron",
-	scheduleValue: string,
+	schedule: Schedule,
 	timezone: string = "UTC",
 	from: Date = new Date(),
 ): Date {
-	if (scheduleType === "interval") {
-		const seconds = parseInt(scheduleValue, 10);
-		if (Number.isNaN(seconds)) {
-			throw new Error(`Invalid interval value: ${scheduleValue}`);
+	const { type, value } = schedule;
+	if (type === "interval") {
+		if (Number.isNaN(value)) {
+			throw new Error(`Invalid interval value: ${value}`);
 		}
-		return new Date(from.getTime() + seconds * 1000);
-	} else if (scheduleType === "cron") {
-		return computeNextRunAt(scheduleValue, timezone, from);
+		return new Date(from.getTime() + value * 1000);
+	} else if (type === "cron") {
+		return computeNextCronRunAt(value, timezone, from);
 	}
-	throw new Error(`Unknown schedule type: ${scheduleType}`);
+	throw new Error(`Unknown schedule type: ${type}`);
 }
 
-export function parseEveryDurationToSeconds(input: string): number | null {
+export function parseEveryDurationToSeconds(input: string): number {
 	// Accepts strings like:
 	// "3 hours", "5 minutes", "1 week", "3 days 12 hours", "2h 30m"
 	const s = input.trim().toLowerCase();
-	if (!s) return null;
+	if (!s) throw new Error("Seconds parse error");
 
 	const unitToSeconds: Record<string, number> = {
 		s: 1,
@@ -68,7 +81,7 @@ export function parseEveryDurationToSeconds(input: string): number | null {
 		const unit = m[2];
 
 		const mult = unitToSeconds[unit];
-		if (!mult) return null;
+		if (!mult) throw new Error("Seconds parse error (multiplier)");
 
 		total += n * mult;
 	}
@@ -76,11 +89,12 @@ export function parseEveryDurationToSeconds(input: string): number | null {
 	// If nothing matched, allow pure seconds like "259200"
 	if (!matched) {
 		const onlyNum = Number(s);
-		if (!Number.isFinite(onlyNum) || onlyNum <= 0) return null;
+		if (!Number.isFinite(onlyNum) || onlyNum <= 0)
+			throw new Error("Seconds parse error (beyond reach)");
 		return Math.floor(onlyNum);
 	}
 
-	if (total <= 0) return null;
+	if (total <= 0) throw new Error("Seconds parse error (negative total)");
 	return total;
 }
 
@@ -106,3 +120,17 @@ export function humanizeSeconds(totalSeconds: number): string {
 
 	return parts.join(" ");
 }
+
+export const validateSchedule = (s: Schedule, tz: string) => {
+	try {
+		getNextRunAt(s, tz);
+		return true;
+	} catch {
+		return false;
+	}
+};
+
+export const humanizeSchedule = (s: Schedule) => {
+	if (s.type === "cron") return s.value;
+	return `every	${humanizeSeconds(s.value)}`;
+};

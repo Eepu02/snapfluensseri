@@ -1,0 +1,34 @@
+import { groupMembers, groups } from "../db/schema";
+import type { CommandCtx } from "./context.type";
+
+export const join = async (ctx: CommandCtx) => {
+	if (!ctx.chat || ctx.chat.type === "private") {
+		return await ctx.reply("This command only works in groups.");
+	}
+
+	const chatId = ctx.chat.id;
+	const userId = ctx.from.id;
+
+	// Ensure group exists
+	await ctx.db
+		.insert(groups)
+		.values({ chatId, isActive: false })
+		.onConflictDoNothing();
+
+	// Upsert member
+	await ctx.db
+		.insert(groupMembers)
+		.values({
+			chatId,
+			userId,
+			username: ctx.from.username,
+			firstName: ctx.from.first_name,
+			isOptedIn: true,
+		})
+		.onConflictDoUpdate({
+			target: [groupMembers.chatId, groupMembers.userId],
+			set: { isOptedIn: true },
+		});
+
+	await ctx.reply(`👋 ${ctx.from.first_name || ctx.from.username}, you're in!`);
+};

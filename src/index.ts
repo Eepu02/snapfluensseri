@@ -1,6 +1,7 @@
 import { getBot } from "./bot";
 import type { Env } from "./db/client";
 import { runCron } from "./utils/cron";
+import { formatErrorMessage } from "./utils/helpers";
 
 export default {
 	async fetch(req: Request, env: Env, ctx: ExecutionContext) {
@@ -18,7 +19,11 @@ export default {
 			}
 
 			const bot = await getBot(env);
-			await bot.handleUpdate(await req.json());
+			try {
+				await bot.handleUpdate(await req.json());
+			} catch (e) {
+				console.log(`[FATAL BOT ERROR]: ${formatErrorMessage(e)}`);
+			}
 			return new Response("ok");
 		}
 

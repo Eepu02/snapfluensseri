@@ -6,7 +6,7 @@ import { groupMembers, groups } from "../db/schema";
 import { pickRandom } from "./random";
 import { escapeHTML, formatMention } from "./telegram";
 
-export function computeNextRunAt(
+export function computeNextCronRunAt(
 	cronExpr: string,
 	timezone: string,
 	from: Date,
@@ -45,7 +45,7 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 
 			// Helper to calculate next run using the anchor time to prevent drift
 			const getNextSchedule = () =>
-				computeNextRunAt(group.scheduleValue, group.timezone, anchorTime);
+				computeNextCronRunAt(group.scheduleValue, group.timezone, anchorTime);
 
 			if (members.length === 0) {
 				await db
