@@ -2,7 +2,8 @@ import { CronExpressionParser } from "cron-parser";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { Telegraf, TelegramError } from "telegraf";
 import { type Env, getDb } from "../db/client";
-import { groupMembers, groups } from "../db/schema";
+import { type Group, groupMembers, groups } from "../db/schema";
+import { formatErrorMessage } from "./helpers";
 import { pickRandom } from "./random";
 import { escapeHTML, formatMention } from "./telegram";
 
@@ -47,11 +48,26 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 			const getNextSchedule = () =>
 				computeNextCronRunAt(group.scheduleValue, group.timezone, anchorTime);
 
-			if (members.length === 0) {
+			const unableToPick = async () => {
+				try {
+					await bot.telegram.sendMessage(
+						group.chatId,
+						"It was time for a draw but there were no group members to pick from :( do /join to be in the pool!",
+					);
+				} catch (e) {
+					console.log(
+						"[BOT MESSAGE ERROR]: Unable to send warning message to group" +
+							formatErrorMessage(e),
+					);
+				}
 				await db
 					.update(groups)
 					.set({ nextRunAt: getNextSchedule() })
 					.where(eq(groups.chatId, group.chatId));
+			};
+
+			if (members.length === 0) {
+				await unableToPick();
 				continue;
 			}
 
@@ -62,10 +78,7 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 			);
 
 			if (!picked) {
-				await db
-					.update(groups)
-					.set({ nextRunAt: getNextSchedule() })
-					.where(eq(groups.chatId, group.chatId));
+				await unableToPick();
 				continue;
 			}
 
