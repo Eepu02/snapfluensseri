@@ -1,5 +1,5 @@
+import { CronExpressionParser } from "cron-parser";
 import { z } from "zod";
-import { computeNextCronRunAt } from "./cron";
 
 export const scheduleModel = z.discriminatedUnion("type", [
 	z.object({
@@ -13,6 +13,18 @@ export const scheduleModel = z.discriminatedUnion("type", [
 ]);
 
 export type Schedule = z.infer<typeof scheduleModel>;
+
+const getNextCronRunAt = (
+	cronExpr: string,
+	timezone: string,
+	from: Date,
+): Date => {
+	const interval = CronExpressionParser.parse(cronExpr, {
+		tz: timezone,
+		currentDate: from,
+	});
+	return interval.next().toDate();
+};
 
 /**
  * Compute the next run time based on schedule type and value.
@@ -33,7 +45,7 @@ export function getNextRunAt(
 		}
 		return new Date(from.getTime() + value * 1000);
 	} else if (type === "cron") {
-		return computeNextCronRunAt(value, timezone, from);
+		return getNextCronRunAt(value, timezone, from);
 	}
 	throw new Error(`Unknown schedule type: ${type}`);
 }
@@ -74,7 +86,7 @@ export function parseEveryDurationToSeconds(input: string): number {
 	let matched = false;
 
 	let m: RegExpExecArray | null;
-	// biome-ignore lint/suspicious/noAssignInExpressions: <explanation>
+	// biome-ignore lint/suspicious/noAssignInExpressions: pitää olla
 	while ((m = re.exec(s)) !== null) {
 		matched = true;
 		const n = Number(m[1]);

@@ -1,7 +1,7 @@
 import { TelegramError } from "telegraf";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as dbClient from "../db/client";
 import { runCron } from "./cron"; // Adjust this path to your cron file
+import * as dbClient from "./db/client";
 
 // 1. Mock Telegraf
 // Variables used in vi.mock must be prefixed with 'mock'
@@ -139,7 +139,9 @@ describe("runCron Integration Tests", () => {
 		]);
 		mockDb.where.mockResolvedValueOnce([{ userId: 100, firstName: "Alice" }]);
 
-		mockSendMessage.mockRejectedValueOnce(new TelegramError(403));
+		mockSendMessage.mockRejectedValueOnce(
+			new TelegramError({ error_code: 403, description: "Forbidden" }),
+		);
 
 		await runCron(mockEnv, scheduledTime);
 

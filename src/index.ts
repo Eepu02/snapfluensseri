@@ -1,10 +1,10 @@
 import { getBot } from "./bot";
+import { runCron } from "./cron";
 import type { Env } from "./db/client";
-import { runCron } from "./utils/cron";
 import { formatErrorMessage } from "./utils/helpers";
 
 export default {
-	async fetch(req: Request, env: Env, ctx: ExecutionContext) {
+	async fetch(req: Request, env: Env) {
 		const url = new URL(req.url);
 
 		if (req.method === "GET" && url.pathname === "/health") {
@@ -24,6 +24,7 @@ export default {
 			} catch (e) {
 				console.log(`[FATAL BOT ERROR]: ${formatErrorMessage(e)}`);
 			}
+			// Always return ok to Telegram, otherwise it will retry the same update multiple times
 			return new Response("ok");
 		}
 

@@ -1,35 +1,36 @@
-import { CronExpressionParser } from "cron-parser";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { Telegraf, TelegramError } from "telegraf";
-import { type Env, getDb } from "../db/client";
-import { type Group, groupMembers, groups } from "../db/schema";
-import { formatErrorMessage } from "./helpers";
-import { pickRandom } from "./random";
-import { escapeHTML, formatMention } from "./telegram";
-
-export function computeNextCronRunAt(
-	cronExpr: string,
-	timezone: string,
-	from: Date,
-): Date {
-	const it = CronExpressionParser.parse(cronExpr, {
-		currentDate: from,
-		tz: timezone,
-	});
-	return it.next().toDate();
-}
+import { type Env, getDb } from "./db/client";
+import { parsedGroupModel } from "./db/model";
+import { groupMembers, groups } from "./db/schema";
+import { formatErrorMessage } from "./utils/helpers";
+import { pickRandom } from "./utils/random";
+import { getNextRunAt } from "./utils/schedule";
+import { escapeHTML, formatMention } from "./utils/telegram";
 
 export async function runCron(env: Env, scheduledTimeMs: number) {
 	const db = getDb(env);
 	const bot = new Telegraf(env.BOT_TOKEN);
 	const anchorTime = new Date(scheduledTimeMs);
 
+	const groupsModel = parsedGroupModel.array();
+
 	try {
-		const dueGroups = await db
+		const rawGroups = await db
 			.select()
 			.from(groups)
 			.where(and(eq(groups.isActive, true), lte(groups.nextRunAt, anchorTime)));
 
+		const parsed = groupsModel.safeParse(rawGroups);
+		if (!parsed.success) {
+			console.error(
+				`[MODEL PARSE ERROR]: Failed to parse groups for scheduledTime ${anchorTime.toISOString()}. Errors: ${JSON.stringify(
+					parsed.error.issues,
+				)}`,
+			);
+			return;
+		}
+		const dueGroups = parsed.data;
 		console.log(`[Cron] Found ${dueGroups.length} due groups`);
 
 		for (const group of dueGroups) {
@@ -44,30 +45,28 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 					),
 				);
 
-			// Helper to calculate next run using the anchor time to prevent drift
-			const getNextSchedule = () =>
-				computeNextCronRunAt(group.scheduleValue, group.timezone, anchorTime);
-
 			const unableToPick = async () => {
 				try {
 					await bot.telegram.sendMessage(
 						group.chatId,
 						"It was time for a draw but there were no group members to pick from :( do /join to be in the pool!",
 					);
-				} catch (e) {
-					console.log(
-						"[BOT MESSAGE ERROR]: Unable to send warning message to group" +
-							formatErrorMessage(e),
+				} catch (err) {
+					console.error(
+						`[BOT MESSAGE ERROR]: Unable to send warning message to group ${group.chatId}: ${formatErrorMessage(err)}`,
 					);
 				}
 				await db
 					.update(groups)
-					.set({ nextRunAt: getNextSchedule() })
+					.set({
+						nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
+					})
 					.where(eq(groups.chatId, group.chatId));
 			};
 
 			if (members.length === 0) {
 				await unableToPick();
+
 				continue;
 			}
 
@@ -160,7 +159,7 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 				.update(groups)
 				.set({
 					lastPickedUserId: picked.userId,
-					nextRunAt: getNextSchedule(),
+					nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
 				})
 				.where(eq(groups.chatId, group.chatId));
 		}

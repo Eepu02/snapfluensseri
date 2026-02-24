@@ -25,6 +25,12 @@ async function setupBot(env: Env) {
 		await next(); // runs next middleware
 	});
 
+	// Debugging middleware to log incoming updates
+	bot.use(async (ctx, next) => {
+		console.log(`[UPDATE RECEIVED]: ${JSON.stringify(ctx.update)}`);
+		await next();
+	});
+
 	/**
 	 * /activate - Create or activate a group
 	 */
