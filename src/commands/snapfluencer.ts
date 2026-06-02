@@ -18,7 +18,7 @@ export const snapfluencer = async (ctx: CommandCtx) => {
 		);
 
 	if (members.length === 0) {
-		return await ctx.reply("Ei soveltuvia jäseniä. Käytä /join liittyäksesi.");
+		return await ctx.reply("Ei soveltuvia jäseniä. Tee /join liittyäksesi.");
 	}
 
 	const group = await ctx.db
