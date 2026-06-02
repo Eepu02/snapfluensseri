@@ -18,7 +18,7 @@ export const snapfluencer = async (ctx: CommandCtx) => {
 		);
 
 	if (members.length === 0) {
-		return await ctx.reply("No eligible members. Use /join to join.");
+		return await ctx.reply("Ei soveltuvia jäseniä. Käytä /join liittyäksesi.");
 	}
 
 	const group = await ctx.db
@@ -37,7 +37,7 @@ export const snapfluencer = async (ctx: CommandCtx) => {
 	);
 
 	if (!picked) {
-		return await ctx.reply("Could not pick a member.");
+		return await ctx.reply("Ei onnannu.");
 	}
 
 	const mention = formatMention(
@@ -45,7 +45,7 @@ export const snapfluencer = async (ctx: CommandCtx) => {
 		picked.username,
 		picked.firstName,
 	);
-	const msgText = `🎉 ${mention} is the new snapfluencer!`;
+	const msgText = `🎉 ${mention} on snapfluensseri!`;
 
 	await ctx.sendMessage(msgText, { parse_mode: "HTML" });
 

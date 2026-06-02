@@ -36,7 +36,7 @@ export const status = async (ctx: CommandCtx) => {
 			? humanizeSeconds(group.schedule.value)
 			: `${group.schedule.value}s`;
 
-	const status = group.isActive ? "✅ Active" : "❌ Inactive";
+	const status = group.isActive ? "✅ Päällä" : "❌ Pois päältä";
 	const schedule =
 		group.schedule.type === "interval"
 			? `Every ${humanizedScheduleValue}`
@@ -48,11 +48,11 @@ export const status = async (ctx: CommandCtx) => {
 
 	const lines = [
 		`${status}`,
-		`Schedule: ${schedule}`,
-		`Timezone: ${group.timezone}`,
-		`Draw Mode: ${drawMode}`,
-		nextRun && `Next draw: ${nextRun}`,
-		`Eligible members: ${eligibleCount}`,
+		`Aikataulu: ${schedule}`,
+		`Aikavyöhyke: ${group.timezone}`,
+		`Arvonta: ${drawMode}`,
+		nextRun && `Seuraava arvonta: ${nextRun}`,
+		`Jäsenten määrä: ${eligibleCount}`,
 	].filter(Boolean);
 
 	await ctx.reply(`📊 Status\n\n${lines.join("\n")}`);

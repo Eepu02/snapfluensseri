@@ -13,5 +13,5 @@ export const deactivate = async (ctx: CommandCtx) => {
 		.set({ isActive: false })
 		.where(eq(groups.chatId, chatId));
 
-	await ctx.reply("❌ Snapfluencer deactivated. Settings are preserved.");
+	await ctx.reply("😪 Heihei sitten.");
 };

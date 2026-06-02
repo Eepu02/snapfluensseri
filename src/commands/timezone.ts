@@ -13,7 +13,7 @@ export const timezone = async (ctx: CommandCtx) => {
 	const tz = ctx.message.text.split(/\s+/).slice(1).join(" ");
 
 	if (!tz) {
-		return await ctx.reply("Usage: /timezone Europe/Helsinki");
+		return await ctx.reply("Käyttö: /timezone Europe/Helsinki");
 	}
 
 	const group = await getGroup({ ctx });
@@ -21,12 +21,12 @@ export const timezone = async (ctx: CommandCtx) => {
 	const validationResult = validateSchedule(group.schedule, tz);
 
 	if (!validationResult) {
-		return await ctx.reply("The timezone is not valid!");
+		return await ctx.reply("Aikavyöhyke ei ole kunnollinen perhana smh");
 	}
 
 	await ctx.db
 		.update(groups)
 		.set({ timezone: tz })
 		.where(eq(groups.chatId, chatId));
-	return await ctx.reply(`🌍 Timezone set to ${tz}`);
+	return await ctx.reply(`🌍 Aikavyöhyke asetettu ${tz}`);
 };

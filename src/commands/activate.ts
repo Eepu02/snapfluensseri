@@ -30,6 +30,6 @@ export const activate = async (ctx: CommandCtx) => {
 	}
 
 	await ctx.reply(
-		`✅ Snapfluencer activated!\n\n` + commandList,
+		`Snapfluensseri! Mennään!\n\n` + commandList,
 	);
 };

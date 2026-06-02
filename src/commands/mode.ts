@@ -11,7 +11,7 @@ export const mode = async (ctx: CommandCtx) => {
 	const args = ctx.message.text.split(/\s+/).slice(1);
 
 	if (args.length !== 1 || !["random", "double"].includes(args[0])) {
-		return await ctx.reply("Usage: /mode random|double");
+		return await ctx.reply("Käyttö: /mode random|double");
 	}
 
 	const drawMode = args[0];
@@ -22,6 +22,6 @@ export const mode = async (ctx: CommandCtx) => {
 		.where(eq(groups.chatId, chatId));
 
 	await ctx.reply(
-		`🎲 Draw mode set to ${drawMode === "double" ? "Double Trouble (10% chance of double pick)" : "Random"}.`,
+		`🎲 Arvonnan tila on nyt ${drawMode === "double" ? "Double Trouble (10% tsäänssi tupla-arpaan)" : "Random"}.`,
 	);
 };

@@ -1,6 +1,13 @@
 import { groupMembers, groups } from "../db/schema";
 import type { CommandCtx } from "./context.type";
 
+const encouragements = [
+	'Camaa',
+	'Lesgou',
+	'Haippii',
+	'It is time',
+]
+
 export const join = async (ctx: CommandCtx) => {
 	if (!ctx.chat || ctx.chat.type === "private") {
 		return await ctx.reply("This command only works in groups.");
@@ -30,5 +37,5 @@ export const join = async (ctx: CommandCtx) => {
 			set: { isOptedIn: true },
 		});
 
-	await ctx.reply(`👋 ${ctx.from.first_name || ctx.from.username}, you're in!`);
+	await ctx.reply(`${encouragements[Math.floor(Math.random() * encouragements.length)]} ${ctx.from.first_name || ctx.from.username}, oot ines! 😎`);
 };

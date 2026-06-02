@@ -21,7 +21,7 @@ export const schedule = async (ctx: CommandCtx) => {
 
 	if (args.length < 2) {
 		return await ctx.reply(
-			"Usage:\n/schedule every X [w/d/h/m/s]\n/schedule cron 0 9 */3 * *",
+			"Käyttö:\n/schedule every X [w/d/h/m/s]\n/schedule cron 0 9 */3 * *",
 		);
 	}
 
@@ -29,7 +29,7 @@ export const schedule = async (ctx: CommandCtx) => {
 
 	if (type !== "cron" && type !== "every") {
 		return await ctx.reply(
-			"Usage:\n/schedule every X [w/d/h/m/s]\n/schedule cron 0 9 */3 * *",
+			"Käyttö:\n/schedule every X [w/d/h/m/s]\n/schedule cron 0 9 */3 * *",
 		);
 	}
 
@@ -51,7 +51,7 @@ export const schedule = async (ctx: CommandCtx) => {
 
 	if (!validateResult) {
 		return await ctx.reply(
-			"Please provide a valid interval or cron.\nExamples:\n" +
+			"Annan kunnon intervalli tai cron.\nEsim:\n" +
 				"/schedule every 3 days\n" +
 				"/schedule every 5 minutes\n" +
 				"/schedule every 3 days 12 hours\n" +
@@ -73,10 +73,10 @@ export const schedule = async (ctx: CommandCtx) => {
 	const fmtResult = formatInTz(nextRunAt, group.timezone);
 
 	if (!fmtResult.success) {
-		return await ctx.reply("Schedule is set but timezone is invalid!");
+		return await ctx.reply("Aikataulu asetettu mutta aikavyöhyke on virheellinen!");
 	} else {
 		return await ctx.reply(
-			`⏰ Schedule set to ${humanizeSchedule(schedule)}. Next run at ${fmtResult.time}.`,
+			`⏰ Aikataulu asetettu ${humanizeSchedule(schedule)}. Seuraava arvonta klo ${fmtResult.time}.`,
 		);
 	}
 };

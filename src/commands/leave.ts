@@ -18,6 +18,6 @@ export const leave = async (ctx: CommandCtx) => {
 		);
 
 	await ctx.reply(
-		`👋 ${ctx.from.first_name || ctx.from.username}, you're out.`,
+		`Bruh ${ctx.from.first_name || ctx.from.username}, ei sit🗿 `,
 	);
 };
