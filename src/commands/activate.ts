@@ -1,4 +1,5 @@
 import { groups } from "../db/schema";
+import { commandList } from "../utils/commandList";
 import { formatErrorMessage } from "../utils/helpers";
 import type { CommandCtx } from "./context.type";
 
@@ -29,14 +30,6 @@ export const activate = async (ctx: CommandCtx) => {
 	}
 
 	await ctx.reply(
-		`✅ Snapfluencer activated!\n\n` +
-			`Commands:\n` +
-			`/schedule every <seconds> - Set interval (e.g., every 259200 for 3 days)\n` +
-			`/schedule cron <expression> - Set cron (e.g., cron 0 9 */3 * *)\n` +
-			`/timezone <tz> - Set timezone for cron (e.g., Europe/Helsinki)\n` +
-			`/join - Opt in to be selected\n` +
-			`/leave - Opt out\n` +
-			`/status - Show current status\n` +
-			`/snapfluencer - Pick now`,
+		`✅ Snapfluencer activated!\n\n` + commandList,
 	);
 };
