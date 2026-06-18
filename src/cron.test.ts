@@ -211,4 +211,96 @@ describe("runCron Integration Tests", () => {
 		// Ensure raw HTML tags are NOT present
 		expect(messageText).not.toContain("<b>");
 	});
+
+	it("should process multiple due groups in parallel", async () => {
+		// GIVEN: Two active due groups
+		const groupA = {
+			chatId: 111,
+			isActive: true,
+			scheduleType: "cron" as const,
+			scheduleValue: "0 12 * * *",
+			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const groupB = {
+			chatId: 222,
+			isActive: true,
+			scheduleType: "cron" as const,
+			scheduleValue: "0 12 * * *",
+			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const mockMembers = [{ userId: 100, firstName: "Alice" }];
+
+		mockDb.where.mockResolvedValueOnce([groupA, groupB]); // For dueGroups select
+		mockDb.where.mockResolvedValue(mockMembers); // For subsequent member selects
+
+		// WHEN: Cron runs
+		await runCron(mockEnv, scheduledTime);
+
+		// THEN: Both groups should have been processed (two sendMessage calls)
+		expect(mockSendMessage).toHaveBeenCalledTimes(2);
+		expect(mockSendMessage).toHaveBeenNthCalledWith(1, 111, expect.any(String), expect.any(Object));
+		expect(mockSendMessage).toHaveBeenNthCalledWith(2, 222, expect.any(String), expect.any(Object));
+	});
+
+	it("should isolate processing errors so that one failed group does not affect others", async () => {
+		// GIVEN: Two active due groups
+		const groupA = {
+			chatId: 111,
+			isActive: true,
+			scheduleType: "cron" as const,
+			scheduleValue: "0 12 * * *",
+			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const groupB = {
+			chatId: 222,
+			isActive: true,
+			scheduleType: "cron" as const,
+			scheduleValue: "0 12 * * *",
+			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const mockMembers = [{ userId: 100, firstName: "Bob" }];
+
+		// Mock the query execution sequentially:
+		// 1. Select dueGroups -> returns [groupA, groupB]
+		// 2. Select members for groupA -> throws an error!
+		// 3. Select members for groupB -> returns mockMembers
+		let callCount = 0;
+		mockDb.where.mockImplementation(async () => {
+			callCount++;
+			if (callCount === 1) {
+				return [groupA, groupB];
+			}
+			if (callCount === 2) {
+				throw new Error("Simulated D1 database failure for Group A");
+			}
+			return mockMembers;
+		});
+
+		// WHEN: Cron runs
+		await runCron(mockEnv, scheduledTime);
+
+		// THEN: Group B should still be processed successfully
+		expect(mockSendMessage).toHaveBeenCalledTimes(1);
+		expect(mockSendMessage).toHaveBeenCalledWith(222, expect.stringContaining("Bob"), expect.any(Object));
+	});
 });
