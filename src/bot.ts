@@ -18,6 +18,13 @@ export interface BotContext extends Context {
 	db: DB;
 }
 
+/**
+ * Initializes and configures the Telegraf bot instance.
+ * Sets up database context middleware, logging middleware, command routing, and message tracking.
+ * 
+ * @param env - The Cloudflare Worker environment configuration.
+ * @returns A fully configured Telegraf bot instance.
+ */
 async function setupBot(env: Env) {
 	const bot = new Telegraf<BotContext>(env.BOT_TOKEN);
 
@@ -114,6 +121,13 @@ async function setupBot(env: Env) {
 
 let cachedBot: Telegraf<BotContext> | null = null;
 
+/**
+ * Retrieves the singleton/cached Telegraf bot instance.
+ * If the instance does not exist, setupBot is called to initialize it.
+ * 
+ * @param env - The Cloudflare Worker environment configuration.
+ * @returns The cached or newly created Telegraf bot instance.
+ */
 export async function getBot(env: Env) {
 	if (cachedBot) return cachedBot;
 	cachedBot = await setupBot(env);

@@ -50,6 +50,14 @@ export function getNextRunAt(
 	throw new Error(`Unknown schedule type: ${type}`);
 }
 
+/**
+ * Parses a user-input duration string (e.g. "3 days", "5 minutes", "2h 30m" or a raw number)
+ * and converts it into a total duration in seconds.
+ * 
+ * @param input - The duration string to parse.
+ * @returns The duration parsed as seconds.
+ * @throws Error if the duration format is invalid or parsed total is non-positive.
+ */
 export function parseEveryDurationToSeconds(input: string): number {
 	// Accepts strings like:
 	// "3 hours", "5 minutes", "1 week", "3 days 12 hours", "2h 30m"
@@ -110,6 +118,13 @@ export function parseEveryDurationToSeconds(input: string): number {
 	return total;
 }
 
+/**
+ * Formats a number of seconds into a human-readable duration string
+ * composed of weeks, days, hours, minutes, and seconds.
+ * 
+ * @param totalSeconds - The duration in seconds.
+ * @returns A formatted string description of the duration.
+ */
 export function humanizeSeconds(totalSeconds: number): string {
 	const parts: string[] = [];
 	let s = totalSeconds;
@@ -133,6 +148,14 @@ export function humanizeSeconds(totalSeconds: number): string {
 	return parts.join(" ");
 }
 
+/**
+ * Validates a given schedule by attempting to compute its next execution time.
+ * If the timezone or cron expression is invalid, returns false.
+ * 
+ * @param s - The schedule definition (cron or interval).
+ * @param tz - The IANA timezone string.
+ * @returns True if the schedule is valid and parsed successfully, false otherwise.
+ */
 export const validateSchedule = (s: Schedule, tz: string) => {
 	try {
 		getNextRunAt(s, tz);

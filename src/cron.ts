@@ -8,6 +8,16 @@ import { pickRandom } from "./utils/random";
 import { getNextRunAt } from "./utils/schedule";
 import { escapeHTML, formatMention } from "./utils/telegram";
 
+/**
+ * Scans the database for active groups that are due for a draw, performs the random selection,
+ * sends Telegram notifications, and updates group schedules and member counts.
+ * 
+ * Group drawings are executed concurrently to keep execution time under Cloudflare Worker limits
+ * and avoid overlapping cron trigger executions.
+ * 
+ * @param env - The Cloudflare Worker environment variables, including database bindings and BOT_TOKEN.
+ * @param scheduledTimeMs - The scheduled cron trigger execution time in milliseconds since the Unix epoch.
+ */
 export async function runCron(env: Env, scheduledTimeMs: number) {
 	const db = getDb(env);
 	const bot = new Telegraf(env.BOT_TOKEN);
