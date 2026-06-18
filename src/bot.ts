@@ -92,30 +92,7 @@ async function setupBot(env: Env) {
 	// Intentionally not in help menu
 	bot.command("onnea", onnea);
 
-	/**
-	 * Track seen users on any message
-	 */
-	bot.on(message("text"), async (ctx) => {
-		if (!ctx.chat || ctx.chat.type === "private" || !ctx.from) return;
 
-		const chatId = ctx.chat.id;
-		const userId = ctx.from.id;
-
-		await withDbRetry(() => ctx.db
-			.insert(groupMembers)
-			.values({
-				chatId,
-				userId,
-				username: ctx.from.username,
-				firstName: ctx.from.first_name,
-				isOptedIn: true,
-				lastSeenAt: new Date(),
-			})
-			.onConflictDoUpdate({
-				target: [groupMembers.chatId, groupMembers.userId],
-				set: { lastSeenAt: new Date() },
-			}));
-	});
 
 	return bot;
 }
