@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getGroup } from "../db/model";
 import { groups } from "../db/schema";
-import { formatInTz } from "../utils/helpers";
+import { formatInTz, withDbRetry } from "../utils/helpers";
 import {
 	getNextRunAt,
 	humanizeSchedule,
@@ -61,14 +61,14 @@ export const schedule = async (ctx: CommandCtx) => {
 
 	const nextRunAt = getNextRunAt(schedule, group.timezone);
 
-	await ctx.db
+	await withDbRetry(() => ctx.db
 		.update(groups)
 		.set({
 			scheduleType: schedule.type,
 			scheduleValue: String(schedule.value),
 			nextRunAt,
 		})
-		.where(eq(groups.chatId, chatId));
+		.where(eq(groups.chatId, chatId)));
 
 	const fmtResult = formatInTz(nextRunAt, group.timezone);
 

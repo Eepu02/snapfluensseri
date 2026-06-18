@@ -13,6 +13,7 @@ import { timezone } from "./commands/timezone";
 import { type DB, type Env, getDb } from "./db/client";
 import { groupMembers } from "./db/schema";
 import { commandList } from "./utils/commandList";
+import { withDbRetry } from "./utils/helpers";
 
 export interface BotContext extends Context {
 	db: DB;
@@ -100,7 +101,7 @@ async function setupBot(env: Env) {
 		const chatId = ctx.chat.id;
 		const userId = ctx.from.id;
 
-		await ctx.db
+		await withDbRetry(() => ctx.db
 			.insert(groupMembers)
 			.values({
 				chatId,
@@ -113,7 +114,7 @@ async function setupBot(env: Env) {
 			.onConflictDoUpdate({
 				target: [groupMembers.chatId, groupMembers.userId],
 				set: { lastSeenAt: new Date() },
-			});
+			}));
 	});
 
 	return bot;

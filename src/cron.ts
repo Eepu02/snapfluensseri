@@ -3,7 +3,7 @@ import { Telegraf, TelegramError } from "telegraf";
 import { type Env, getDb } from "./db/client";
 import { parsedGroupModel } from "./db/model";
 import { groupMembers, groups } from "./db/schema";
-import { formatErrorMessage } from "./utils/helpers";
+import { formatErrorMessage, withDbRetry } from "./utils/helpers";
 import { pickRandom } from "./utils/random";
 import { getNextRunAt } from "./utils/schedule";
 import { escapeHTML, formatMention } from "./utils/telegram";
@@ -67,12 +67,12 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 							`[BOT MESSAGE ERROR]: Unable to send warning message to group ${group.chatId}: ${formatErrorMessage(err)}`,
 						);
 					}
-					await db
+					await withDbRetry(() => db
 						.update(groups)
 						.set({
 							nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
 						})
-						.where(eq(groups.chatId, group.chatId));
+						.where(eq(groups.chatId, group.chatId)));
 				};
 
 				if (members.length === 0) {
@@ -142,7 +142,7 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 					});
 				} catch (err) {
 					if (err instanceof TelegramError && err.code === 403) {
-						await db.delete(groups).where(eq(groups.chatId, group.chatId));
+						await withDbRetry(() => db.delete(groups).where(eq(groups.chatId, group.chatId)));
 						return;
 					}
 					console.error(`[Cron] Send failed for ${group.chatId}:`, err);
@@ -151,7 +151,7 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 				// 5. Atomic Updates
 				// Increment snapCount directly in SQL to avoid race conditions
 				const increment = (uid: number) =>
-					db
+					withDbRetry(() => db
 						.update(groupMembers)
 						.set({ snapCount: sql`${groupMembers.snapCount} + 1` })
 						.where(
@@ -159,19 +159,19 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 								eq(groupMembers.chatId, group.chatId),
 								eq(groupMembers.userId, uid),
 							),
-						);
+						));
 
 				await increment(picked.userId);
 				if (secondPick) await increment(secondPick.userId);
 
 				// Update group state (using anchorTime to calculate next run)
-				await db
+				await withDbRetry(() => db
 					.update(groups)
 					.set({
 						lastPickedUserId: picked.userId,
 						nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
 					})
-					.where(eq(groups.chatId, group.chatId));
+					.where(eq(groups.chatId, group.chatId)));
 			} catch (err) {
 				console.error(`[Cron] Error processing group ${group.chatId}:`, err);
 			}
