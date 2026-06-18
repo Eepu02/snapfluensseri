@@ -27,13 +27,9 @@ export const snapfluencer = async (ctx: CommandCtx) => {
 		.where(eq(groups.chatId, chatId))
 		.limit(1);
 
-	const lastPickedIndex = members.findIndex(
-		(m) => m.userId === (group[0]?.lastPickedUserId || null),
-	);
-
 	const picked = pickRandom(
 		members,
-		lastPickedIndex >= 0 ? [lastPickedIndex] : undefined,
+		group[0]?.lastPickedUserId ? [group[0].lastPickedUserId] : [],
 	);
 
 	if (!picked) {

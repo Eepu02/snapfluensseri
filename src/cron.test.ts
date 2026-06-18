@@ -16,9 +16,9 @@ vi.mock("telegraf", () => {
 		},
 		TelegramError: class extends Error {
 			code: number;
-			constructor(code: number) {
-				super();
-				this.code = code;
+			constructor(payload: any) {
+				super(payload?.description || "Telegram Error");
+				this.code = typeof payload === "number" ? payload : payload?.error_code;
 				this.name = "TelegramError";
 			}
 		} as any,
@@ -50,9 +50,15 @@ describe("runCron Integration Tests", () => {
 		// GIVEN: A group with 3 members. Alice was the last winner.
 		const mockGroup = {
 			chatId: 123,
+			isActive: true,
+			scheduleType: "cron" as const,
 			scheduleValue: "0 12 * * *",
 			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: 123,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
 		};
 		const mockMembers = [
 			{ userId: 123, firstName: "Alice", username: "ali" },
@@ -86,8 +92,15 @@ describe("runCron Integration Tests", () => {
 		// GIVEN: 3 members
 		const mockGroup = {
 			chatId: 456,
+			isActive: true,
+			scheduleType: "cron" as const,
 			scheduleValue: "0 12 * * *",
 			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "double" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
 		};
 		const mockMembers = [
 			{ userId: 100, firstName: "Alice" },
@@ -113,9 +126,15 @@ describe("runCron Integration Tests", () => {
 		// GIVEN: Only Alice is in the group, and she was the last winner
 		const mockGroup = {
 			chatId: 789,
+			isActive: true,
+			scheduleType: "cron" as const,
 			scheduleValue: "0 12 * * *",
 			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: 100,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
 		};
 		const mockMembers = [{ userId: 100, firstName: "Alice" }];
 
@@ -135,7 +154,18 @@ describe("runCron Integration Tests", () => {
 	it("should delete the group from DB if the bot was kicked (403 Error)", async () => {
 		// GIVEN: Telegram returns 403 Forbidden
 		mockDb.where.mockResolvedValueOnce([
-			{ chatId: 999, scheduleValue: "* * * * *" },
+			{
+				chatId: 999,
+				isActive: true,
+				scheduleType: "cron" as const,
+				scheduleValue: "* * * * *",
+				timezone: "UTC",
+				nextRunAt: new Date(scheduledTime),
+				lastPickedUserId: null,
+				drawMode: "random" as const,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		]);
 		mockDb.where.mockResolvedValueOnce([{ userId: 100, firstName: "Alice" }]);
 
@@ -153,8 +183,15 @@ describe("runCron Integration Tests", () => {
 		// GIVEN: A user with HTML characters in their name
 		const mockGroup = {
 			chatId: 111,
+			isActive: true,
+			scheduleType: "cron" as const,
 			scheduleValue: "0 12 * * *",
 			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
 		};
 		const mockMembers = [
 			{ userId: 100, firstName: "<b>Malicious</b>", username: "evil&co" },

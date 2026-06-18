@@ -33,136 +33,141 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 		const dueGroups = parsed.data;
 		console.log(`[Cron] Found ${dueGroups.length} due groups`);
 
-		for (const group of dueGroups) {
-			// 1. Get eligible members
-			const members = await db
-				.select()
-				.from(groupMembers)
-				.where(
-					and(
-						eq(groupMembers.chatId, group.chatId),
-						eq(groupMembers.isOptedIn, true),
-					),
-				);
-
-			const unableToPick = async () => {
-				try {
-					await bot.telegram.sendMessage(
-						group.chatId,
-						"It was time for a draw but there were no group members to pick from :( do /join to be in the pool!",
-					);
-				} catch (err) {
-					console.error(
-						`[BOT MESSAGE ERROR]: Unable to send warning message to group ${group.chatId}: ${formatErrorMessage(err)}`,
-					);
-				}
-				await db
-					.update(groups)
-					.set({
-						nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
-					})
-					.where(eq(groups.chatId, group.chatId));
-			};
-
-			if (members.length === 0) {
-				await unableToPick();
-
-				continue;
-			}
-
-			// 2. Selection Logic
-			const picked = pickRandom(
-				members,
-				group.lastPickedUserId ? [group.lastPickedUserId] : [],
-			);
-
-			if (!picked) {
-				await unableToPick();
-				continue;
-			}
-
-			let secondPick = null;
-			const doubleDraw = group.drawMode === "double";
-			const roll = Math.random() < 0.1;
-			if (doubleDraw && roll && members.length > 1) {
-				// Exclude both the current primary pick AND the previous run's winner
-				secondPick = pickRandom(
-					members,
-					[picked.userId, group.lastPickedUserId].filter((u) => u !== null),
-				);
-			}
-
-			// 3. Prepare Message (with HTML escaping)
-			const titles = [
-				"👻 Snapfluencer",
-				"🔥 Main Character",
-				"👑 Content Overlord",
-				"💅 Aesthetic Manager",
-				"😎 Vibe Director",
-				"🎬 Storyteller Supreme",
-				"🌟 Social Media Star",
-				"📱 Digital Diva",
-				"🎉 Trendsetter",
-				"🚀 Engagement Guru",
-				"🎯 Influencer Pro",
-				"🎨 Creative Visionary",
-				"📷 Photo Phenom",
-				"💡 Idea Machine",
-				"🌈 Mood Booster",
-				"✨ Highlight Hero",
-				"💥 Viral Sensation",
-			];
-
-			const title = titles[Math.floor(Math.random() * titles.length)];
-
-			const mention1 = formatMention(
-				picked.userId,
-				escapeHTML(picked.username ?? undefined),
-				escapeHTML(picked.firstName ?? undefined),
-			);
-
-			const msgText = secondPick
-				? `Double Trouble! New ${title}s are ${mention1} and ${formatMention(secondPick.userId, escapeHTML(secondPick.username ?? undefined), escapeHTML(secondPick.firstName ?? undefined))}!`
-				: `New ${title} is ${mention1}!`;
-
-			// 4. Send Message with Error Handling
+		const promises = dueGroups.map(async (group) => {
 			try {
-				await bot.telegram.sendMessage(group.chatId, msgText, {
-					parse_mode: "HTML",
-				});
-			} catch (err) {
-				if (err instanceof TelegramError && err.code === 403) {
-					await db.delete(groups).where(eq(groups.chatId, group.chatId));
-					continue;
-				}
-				console.error(`[Cron] Send failed for ${group.chatId}:`, err);
-			}
-
-			// 5. Atomic Updates
-			// Increment snapCount directly in SQL to avoid race conditions
-			const increment = (uid: number) =>
-				db
-					.update(groupMembers)
-					.set({ snapCount: sql`${groupMembers.snapCount} + 1` })
+				// 1. Get eligible members
+				const members = await db
+					.select()
+					.from(groupMembers)
 					.where(
 						and(
 							eq(groupMembers.chatId, group.chatId),
-							eq(groupMembers.userId, uid),
+							eq(groupMembers.isOptedIn, true),
 						),
 					);
 
-			await increment(picked.userId);
-			if (secondPick) await increment(secondPick.userId);
+				const unableToPick = async () => {
+					try {
+						await bot.telegram.sendMessage(
+							group.chatId,
+							"It was time for a draw but there were no group members to pick from :( do /join to be in the pool!",
+						);
+					} catch (err) {
+						console.error(
+							`[BOT MESSAGE ERROR]: Unable to send warning message to group ${group.chatId}: ${formatErrorMessage(err)}`,
+						);
+					}
+					await db
+						.update(groups)
+						.set({
+							nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
+						})
+						.where(eq(groups.chatId, group.chatId));
+				};
 
-			// Update group state (using anchorTime to calculate next run)
-			await db
-				.update(groups)
-				.set({
-					lastPickedUserId: picked.userId,
-					nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
-				})
-				.where(eq(groups.chatId, group.chatId));
-		}
+				if (members.length === 0) {
+					await unableToPick();
+					return;
+				}
+
+				// 2. Selection Logic
+				const picked = pickRandom(
+					members,
+					group.lastPickedUserId ? [group.lastPickedUserId] : [],
+				);
+
+				if (!picked) {
+					await unableToPick();
+					return;
+				}
+
+				let secondPick = null;
+				const doubleDraw = group.drawMode === "double";
+				const roll = Math.random() < 0.1;
+				if (doubleDraw && roll && members.length > 1) {
+					// Exclude both the current primary pick AND the previous run's winner
+					secondPick = pickRandom(
+						members,
+						[picked.userId, group.lastPickedUserId].filter((u) => u !== null),
+					);
+				}
+
+				// 3. Prepare Message (with HTML escaping)
+				const titles = [
+					"👻 Snapfluencer",
+					"🔥 Main Character",
+					"👑 Content Overlord",
+					"💅 Aesthetic Manager",
+					"😎 Vibe Director",
+					"🎬 Storyteller Supreme",
+					"🌟 Social Media Star",
+					"📱 Digital Diva",
+					"🎉 Trendsetter",
+					"🚀 Engagement Guru",
+					"🎯 Influencer Pro",
+					"🎨 Creative Visionary",
+					"📷 Photo Phenom",
+					"💡 Idea Machine",
+					"🌈 Mood Booster",
+					"✨ Highlight Hero",
+					"💥 Viral Sensation",
+				];
+
+				const title = titles[Math.floor(Math.random() * titles.length)];
+
+				const mention1 = formatMention(
+					picked.userId,
+					escapeHTML(picked.username ?? undefined),
+					escapeHTML(picked.firstName ?? undefined),
+				);
+
+				const msgText = secondPick
+					? `Double Trouble! New ${title}s are ${mention1} and ${formatMention(secondPick.userId, escapeHTML(secondPick.username ?? undefined), escapeHTML(secondPick.firstName ?? undefined))}!`
+					: `New ${title} is ${mention1}!`;
+
+				// 4. Send Message with Error Handling
+				try {
+					await bot.telegram.sendMessage(group.chatId, msgText, {
+						parse_mode: "HTML",
+					});
+				} catch (err) {
+					if (err instanceof TelegramError && err.code === 403) {
+						await db.delete(groups).where(eq(groups.chatId, group.chatId));
+						return;
+					}
+					console.error(`[Cron] Send failed for ${group.chatId}:`, err);
+				}
+
+				// 5. Atomic Updates
+				// Increment snapCount directly in SQL to avoid race conditions
+				const increment = (uid: number) =>
+					db
+						.update(groupMembers)
+						.set({ snapCount: sql`${groupMembers.snapCount} + 1` })
+						.where(
+							and(
+								eq(groupMembers.chatId, group.chatId),
+								eq(groupMembers.userId, uid),
+							),
+						);
+
+				await increment(picked.userId);
+				if (secondPick) await increment(secondPick.userId);
+
+				// Update group state (using anchorTime to calculate next run)
+				await db
+					.update(groups)
+					.set({
+						lastPickedUserId: picked.userId,
+						nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
+					})
+					.where(eq(groups.chatId, group.chatId));
+			} catch (err) {
+				console.error(`[Cron] Error processing group ${group.chatId}:`, err);
+			}
+		});
+
+		await Promise.all(promises);
 	} catch (err) {
 		console.error("[Cron] Critical Error:", err);
 	}
