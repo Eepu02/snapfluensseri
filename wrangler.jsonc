@@ -31,12 +31,30 @@
 		"production": {
 			"vars": {
 				"ENVIRONMENT": "production"
-			}
+			},
+			"d1_databases": [
+				{
+					"binding": "snapfluencer",
+					"database_name": "snapfluencer",
+					"database_id": "7e5d3ee1-3923-4d58-a106-090e3d7556bd",
+					"migrations_dir": "drizzle",
+					"remote": true
+				}
+			]
 		},
 		"development": {
 			"vars": {
 				"ENVIRONMENT": "development"
-			}
+			},
+			"d1_databases": [
+				{
+					"binding": "snapfluencer",
+					"database_name": "snapfluencer",
+					"database_id": "7e5d3ee1-3923-4d58-a106-090e3d7556bd",
+					"migrations_dir": "drizzle",
+					"remote": true
+				}
+			]
 		}
 	}
 	/**
