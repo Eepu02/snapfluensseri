@@ -4,7 +4,7 @@ A Telegram bot built with Cloudflare Workers, Cloudflare D1 (SQLite), and Drizzl
 
 ## Features
 
-- **Automated Drawings**: Runs periodically (based on a configurable interval or cron expression) to select a snapfluencer.
+- **Automated Drawings**: Runs periodically using fixed intervals, timezone-aware calendar intervals, or cron expressions.
 - **Multiple Draw Modes**: Supports standard `random` mode and `double` (Double Trouble) mode with a 10% chance to pick two users.
 - **Timezone Support**: Custom timezone settings so cron schedules execute at the expected local times.
 - **HTML Mention Support**: Mentions winners securely by escaping usernames and using HTML formatting.
@@ -19,7 +19,9 @@ A Telegram bot built with Cloudflare Workers, Cloudflare D1 (SQLite), and Drizzl
 - `/join` - Adds yourself to the drawing candidate pool.
 - `/leave` - Removes yourself from the candidate pool.
 - `/status` - Displays current group config, active members, drawing mode, and next scheduled draw time.
-- `/schedule every <duration>` or `/schedule cron <expression>` - Configures draw frequency.
+- `/schedule every <duration>` - Configures a fixed-duration frequency.
+- `/schedule every <days> days at <HH:mm>` - Runs every N local calendar days at an exact local time (weeks are also supported).
+- `/schedule cron <expression>` - Configures a cron schedule.
 - `/timezone <tz>` - Sets local timezone for the group (e.g. `Europe/Helsinki`).
 - `/mode <random/double>` - Configures the draw mode.
 - `/snapfluencer` - Triggers a manual draw immediately.
@@ -54,7 +56,7 @@ The codebase is structured as follows:
 
 ### Entry Points
 - **HTTP Fetch Handler (`src/index.ts`)**: Handles webhooks sent from the Telegram Bot API and routing for simple health checks.
-- **Scheduled Cron Handler (`src/index.ts`)**: Triggers every minute (via wrangler cron triggers) and calls `runCron()` in `src/cron.ts` to process all active groups whose `nextRunAt` timestamp has elapsed.
+- **Scheduled Cron Handler (`src/index.ts`)**: Triggers every minute (via wrangler cron triggers) and calls `runCron()` in `src/cron.ts` to atomically claim and process active groups whose `nextRunAt` timestamp has elapsed. Future interval runs stay aligned to the stored schedule cursor rather than processing completion time.
 
 ---
 

@@ -41,7 +41,9 @@ export async function listGroups(db: DrizzleD1Database<typeof schema>) {
 		const schedule =
 			group.scheduleType === "interval"
 				? `Every ${group.scheduleValue}s`
-				: `Cron: ${group.scheduleValue}`;
+				: group.scheduleType === "calendar"
+					? `Calendar: ${group.scheduleValue}`
+					: `Cron: ${group.scheduleValue}`;
 
 		console.log(`
   Chat ID: ${group.chatId}

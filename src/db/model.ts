@@ -50,16 +50,34 @@ export const parsedGroupModel = groupSelectModel
 	.transform((row, ctx) => {
 		const { scheduleType, scheduleValue, ...rest } = row;
 
-		const schedule: Schedule =
+		const schedule: Schedule | typeof z.NEVER =
 			scheduleType === "cron"
 				? ({ type: "cron", value: scheduleValue } satisfies Schedule)
-				: (() => {
-						const interval = coerceIntervalFromDb(scheduleValue, ctx, [
-							"scheduleValue",
-						]);
-						if (interval == null) return z.NEVER;
-						return { type: "interval", value: interval } satisfies Schedule;
-					})();
+				: scheduleType === "calendar"
+					? (() => {
+							try {
+								const parsed = scheduleModel.safeParse({
+									type: "calendar",
+									value: JSON.parse(scheduleValue),
+								});
+								if (parsed.success) return parsed.data;
+							} catch {
+								// Report the same model issue below for malformed JSON.
+							}
+							ctx.addIssue({
+								code: "custom",
+								message: "scheduleValue must be a valid calendar schedule",
+								path: ["scheduleValue"],
+							});
+							return z.NEVER;
+						})()
+					: (() => {
+							const interval = coerceIntervalFromDb(scheduleValue, ctx, [
+								"scheduleValue",
+							]);
+							if (interval == null) return z.NEVER;
+							return { type: "interval", value: interval } satisfies Schedule;
+						})();
 
 		if (schedule === z.NEVER) return z.NEVER;
 

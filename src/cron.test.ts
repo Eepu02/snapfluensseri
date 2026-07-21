@@ -1,6 +1,7 @@
 import { TelegramError } from "telegraf";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCron } from "./cron"; // Adjust this path to your cron file
+import type { Env } from "./db/client";
 import * as dbClient from "./db/client";
 
 // 1. Mock Telegraf
@@ -16,12 +17,19 @@ vi.mock("telegraf", () => {
 		},
 		TelegramError: class extends Error {
 			code: number;
-			constructor(payload: any) {
-				super(payload?.description || "Telegram Error");
-				this.code = typeof payload === "number" ? payload : payload?.error_code;
+			constructor(
+				payload: number | { description?: string; error_code?: number },
+			) {
+				super(
+					typeof payload === "number"
+						? "Telegram Error"
+						: payload.description || "Telegram Error",
+				);
+				this.code =
+					typeof payload === "number" ? payload : (payload.error_code ?? 500);
 				this.name = "TelegramError";
 			}
-		} as any,
+		},
 	};
 });
 
@@ -33,17 +41,20 @@ const mockDb = {
 	where: vi.fn().mockReturnThis(),
 	update: vi.fn().mockReturnThis(),
 	set: vi.fn().mockReturnThis(),
+	returning: vi.fn().mockResolvedValue([{ chatId: 1 }]),
 	delete: vi.fn().mockReturnThis(),
 };
 
 describe("runCron Integration Tests", () => {
-	const mockEnv = { BOT_TOKEN: "fake_token" } as any;
+	const mockEnv = { BOT_TOKEN: "fake_token" } as Env;
 	const scheduledTime = new Date("2024-01-01T12:00:00Z").getTime();
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.restoreAllMocks();
-		vi.spyOn(dbClient, "getDb").mockReturnValue(mockDb as any);
+		vi.spyOn(dbClient, "getDb").mockReturnValue(
+			mockDb as unknown as ReturnType<typeof dbClient.getDb>,
+		);
 	});
 
 	it("should perform a standard draw excluding the last winner", async () => {
@@ -86,6 +97,32 @@ describe("runCron Integration Tests", () => {
 
 		// Verify snapCount update was triggered
 		expect(mockDb.update).toHaveBeenCalled();
+	});
+
+	it("should not process a due group when another worker already claimed it", async () => {
+		const mockGroup = {
+			chatId: 321,
+			isActive: true,
+			scheduleType: "interval" as const,
+			scheduleValue: "3600",
+			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		mockDb.where.mockResolvedValueOnce([mockGroup]);
+		mockDb.where.mockResolvedValueOnce([{ userId: 100, firstName: "Alice" }]);
+		mockDb.returning.mockResolvedValueOnce([]);
+
+		await runCron(mockEnv, scheduledTime);
+
+		expect(mockSendMessage).not.toHaveBeenCalled();
+		expect(mockDb.set).toHaveBeenCalledWith({
+			nextRunAt: new Date("2024-01-01T13:00:00Z"),
+		});
 	});
 
 	it("should trigger 'Double Trouble' when the 10% roll succeeds", async () => {
@@ -241,15 +278,26 @@ describe("runCron Integration Tests", () => {
 		const mockMembers = [{ userId: 100, firstName: "Alice" }];
 
 		mockDb.where.mockResolvedValueOnce([groupA, groupB]); // For dueGroups select
-		mockDb.where.mockResolvedValue(mockMembers); // For subsequent member selects
+		mockDb.where.mockResolvedValueOnce(mockMembers);
+		mockDb.where.mockResolvedValueOnce(mockMembers);
 
 		// WHEN: Cron runs
 		await runCron(mockEnv, scheduledTime);
 
 		// THEN: Both groups should have been processed (two sendMessage calls)
 		expect(mockSendMessage).toHaveBeenCalledTimes(2);
-		expect(mockSendMessage).toHaveBeenNthCalledWith(1, 111, expect.any(String), expect.any(Object));
-		expect(mockSendMessage).toHaveBeenNthCalledWith(2, 222, expect.any(String), expect.any(Object));
+		expect(mockSendMessage).toHaveBeenNthCalledWith(
+			1,
+			111,
+			expect.any(String),
+			expect.any(Object),
+		);
+		expect(mockSendMessage).toHaveBeenNthCalledWith(
+			2,
+			222,
+			expect.any(String),
+			expect.any(Object),
+		);
 	});
 
 	it("should isolate processing errors so that one failed group does not affect others", async () => {
@@ -285,15 +333,18 @@ describe("runCron Integration Tests", () => {
 		// 2. Select members for groupA -> throws an error!
 		// 3. Select members for groupB -> returns mockMembers
 		let callCount = 0;
-		mockDb.where.mockImplementation(async () => {
+		mockDb.where.mockImplementation(() => {
 			callCount++;
 			if (callCount === 1) {
-				return [groupA, groupB];
+				return Promise.resolve([groupA, groupB]);
 			}
 			if (callCount === 2) {
-				throw new Error("Simulated D1 database failure for Group A");
+				return Promise.reject(
+					new Error("Simulated D1 database failure for Group A"),
+				);
 			}
-			return mockMembers;
+			if (callCount === 3) return Promise.resolve(mockMembers);
+			return mockDb;
 		});
 
 		// WHEN: Cron runs
@@ -301,6 +352,10 @@ describe("runCron Integration Tests", () => {
 
 		// THEN: Group B should still be processed successfully
 		expect(mockSendMessage).toHaveBeenCalledTimes(1);
-		expect(mockSendMessage).toHaveBeenCalledWith(222, expect.stringContaining("Bob"), expect.any(Object));
+		expect(mockSendMessage).toHaveBeenCalledWith(
+			222,
+			expect.stringContaining("Bob"),
+			expect.any(Object),
+		);
 	});
 });

@@ -71,7 +71,7 @@ export type DrawMode = z.infer<typeof drawModeModel>;
 
 export const groupSelectModel = createSelectSchema(groups).extend({
 	drawMode: drawModeModel,
-	scheduleType: z.enum(["cron", "interval"]),
+	scheduleType: z.enum(["cron", "interval", "calendar"]),
 	scheduleValue: z.string(),
 });
 
