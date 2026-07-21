@@ -63,6 +63,9 @@ const calendarDateAtTime = (
 		.set({ hour, minute, second: 0, millisecond: 0 });
 };
 
+// Date.UTC deliberately treats local year/month/day components as a neutral
+// calendar ordinal. Only the number of dates between two local days matters;
+// their real UTC offsets must not affect the result.
 const localDayOrdinal = (date: DateTime) =>
 	Math.floor(Date.UTC(date.year, date.month - 1, date.day) / 86_400_000);
 
@@ -90,7 +93,11 @@ export function getInitialRunAt(
 	).toJSDate();
 }
 
-/** Backwards-compatible alias for the first occurrence after a date. */
+/**
+ * Backwards-compatible alias for the first occurrence after a date.
+ *
+ * @deprecated Use getInitialRunAt for newly configured schedules.
+ */
 export function getNextRunAt(
 	schedule: Schedule,
 	timezone: string = "UTC",

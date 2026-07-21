@@ -83,6 +83,8 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 				);
 				if (claimed.length === 0) return;
 
+				// The successful claim has already advanced the schedule. This is
+				// intentional even when no eligible member can be picked below.
 				const unableToPick = async () => {
 					try {
 						await bot.telegram.sendMessage(
