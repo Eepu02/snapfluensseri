@@ -5,16 +5,16 @@ import { parsedGroupModel } from "./db/model";
 import { groupMembers, groups } from "./db/schema";
 import { formatErrorMessage, withDbRetry } from "./utils/helpers";
 import { pickRandom } from "./utils/random";
-import { getNextRunAt } from "./utils/schedule";
+import { getNextFutureRunAt } from "./utils/schedule";
 import { escapeHTML, formatMention } from "./utils/telegram";
 
 /**
  * Scans the database for active groups that are due for a draw, performs the random selection,
  * sends Telegram notifications, and updates group schedules and member counts.
- * 
+ *
  * Group drawings are executed concurrently to keep execution time under Cloudflare Worker limits
  * and avoid overlapping cron trigger executions.
- * 
+ *
  * @param env - The Cloudflare Worker environment variables, including database bindings and BOT_TOKEN.
  * @param scheduledTimeMs - The scheduled cron trigger execution time in milliseconds since the Unix epoch.
  */
@@ -45,6 +45,9 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 
 		const promises = dueGroups.map(async (group) => {
 			try {
+				if (!group.nextRunAt) return;
+				const previousRunAt = group.nextRunAt;
+
 				// 1. Get eligible members
 				const members = await db
 					.select()
@@ -56,6 +59,32 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 						),
 					);
 
+				// Move the stored cadence cursor before external work. The conditional
+				// update is an atomic claim, so overlapping cron executions and stale
+				// schedule snapshots cannot process the same occurrence twice.
+				const nextRunAt = getNextFutureRunAt(
+					group.schedule,
+					group.timezone,
+					previousRunAt,
+					anchorTime,
+				);
+				const claimed = await withDbRetry(() =>
+					db
+						.update(groups)
+						.set({ nextRunAt })
+						.where(
+							and(
+								eq(groups.chatId, group.chatId),
+								eq(groups.isActive, true),
+								eq(groups.nextRunAt, previousRunAt),
+							),
+						)
+						.returning({ chatId: groups.chatId }),
+				);
+				if (claimed.length === 0) return;
+
+				// The successful claim has already advanced the schedule. This is
+				// intentional even when no eligible member can be picked below.
 				const unableToPick = async () => {
 					try {
 						await bot.telegram.sendMessage(
@@ -67,12 +96,6 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 							`[BOT MESSAGE ERROR]: Unable to send warning message to group ${group.chatId}: ${formatErrorMessage(err)}`,
 						);
 					}
-					await withDbRetry(() => db
-						.update(groups)
-						.set({
-							nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
-						})
-						.where(eq(groups.chatId, group.chatId)));
 				};
 
 				if (members.length === 0) {
@@ -142,7 +165,9 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 					});
 				} catch (err) {
 					if (err instanceof TelegramError && err.code === 403) {
-						await withDbRetry(() => db.delete(groups).where(eq(groups.chatId, group.chatId)));
+						await withDbRetry(() =>
+							db.delete(groups).where(eq(groups.chatId, group.chatId)),
+						);
 						return;
 					}
 					console.error(`[Cron] Send failed for ${group.chatId}:`, err);
@@ -151,27 +176,31 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 				// 5. Atomic Updates
 				// Increment snapCount directly in SQL to avoid race conditions
 				const increment = (uid: number) =>
-					withDbRetry(() => db
-						.update(groupMembers)
-						.set({ snapCount: sql`${groupMembers.snapCount} + 1` })
-						.where(
-							and(
-								eq(groupMembers.chatId, group.chatId),
-								eq(groupMembers.userId, uid),
+					withDbRetry(() =>
+						db
+							.update(groupMembers)
+							.set({ snapCount: sql`${groupMembers.snapCount} + 1` })
+							.where(
+								and(
+									eq(groupMembers.chatId, group.chatId),
+									eq(groupMembers.userId, uid),
+								),
 							),
-						));
+					);
 
 				await increment(picked.userId);
 				if (secondPick) await increment(secondPick.userId);
 
-				// Update group state (using anchorTime to calculate next run)
-				await withDbRetry(() => db
-					.update(groups)
-					.set({
-						lastPickedUserId: picked.userId,
-						nextRunAt: getNextRunAt(group.schedule, group.timezone, anchorTime),
-					})
-					.where(eq(groups.chatId, group.chatId)));
+				// The schedule cursor was advanced by the atomic claim above; only the
+				// winner state remains to update here.
+				await withDbRetry(() =>
+					db
+						.update(groups)
+						.set({
+							lastPickedUserId: picked.userId,
+						})
+						.where(eq(groups.chatId, group.chatId)),
+				);
 			} catch (err) {
 				console.error(`[Cron] Error processing group ${group.chatId}:`, err);
 			}

@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getGroup, type ParsedGroupModel } from "../db/model";
 import { groupMembers } from "../db/schema";
 import { formatInTz } from "../utils/helpers";
-import { humanizeSeconds } from "../utils/schedule";
+import { humanizeSchedule } from "../utils/schedule";
 import type { CommandCtx } from "./context.type";
 
 export const status = async (ctx: CommandCtx) => {
@@ -31,16 +31,11 @@ export const status = async (ctx: CommandCtx) => {
 		return fmtResult.time;
 	};
 
-	const humanizedScheduleValue =
-		group.schedule.type === "interval"
-			? humanizeSeconds(group.schedule.value)
-			: `${group.schedule.value}s`;
-
 	const status = group.isActive ? "✅ Päällä" : "❌ Pois päältä";
 	const schedule =
-		group.schedule.type === "interval"
-			? `Every ${humanizedScheduleValue}`
-			: `Cron: ${group.schedule.value}`;
+		group.schedule.type === "cron"
+			? `Cron: ${humanizeSchedule(group.schedule)}`
+			: humanizeSchedule(group.schedule);
 	const nextRun = getNextRun(group);
 	const eligibleCount = members.length;
 

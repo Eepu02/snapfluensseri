@@ -3,10 +3,11 @@ import { getGroup } from "../db/model";
 import { groups } from "../db/schema";
 import { formatInTz, withDbRetry } from "../utils/helpers";
 import {
-	getNextRunAt,
+	getInitialRunAt,
 	humanizeSchedule,
-	parseEveryDurationToSeconds,
+	parseEverySchedule,
 	type Schedule,
+	serializeScheduleValue,
 	validateSchedule,
 } from "../utils/schedule";
 import type { CommandCtx } from "./context.type";
@@ -21,7 +22,7 @@ export const schedule = async (ctx: CommandCtx) => {
 
 	if (args.length < 2) {
 		return await ctx.reply(
-			"Käyttö:\n/schedule every X [w/d/h/m/s]\n/schedule cron 0 9 */3 * *",
+			"Käyttö:\n/schedule every X [w/d/h/m/s]\n/schedule every 3 days at 09:00\n/schedule cron 0 9 * * *",
 		);
 	}
 
@@ -29,22 +30,27 @@ export const schedule = async (ctx: CommandCtx) => {
 
 	if (type !== "cron" && type !== "every") {
 		return await ctx.reply(
-			"Käyttö:\n/schedule every X [w/d/h/m/s]\n/schedule cron 0 9 */3 * *",
+			"Käyttö:\n/schedule every X [w/d/h/m/s]\n/schedule every 3 days at 09:00\n/schedule cron 0 9 * * *",
 		);
 	}
 
 	const scheduleValue = args.slice(1).join(" "); // allow multi-word
 
-	const schedule: Schedule =
-		type === "every"
-			? {
-					type: "interval" as const,
-					value: parseEveryDurationToSeconds(scheduleValue),
-				}
-			: {
-					type: "cron" as const,
-					value: scheduleValue,
-				};
+	let schedule: Schedule;
+	try {
+		schedule =
+			type === "every"
+				? parseEverySchedule(scheduleValue)
+				: { type: "cron", value: scheduleValue };
+	} catch {
+		return await ctx.reply(
+			"Annan kunnon intervalli tai cron.\nEsim:\n" +
+				"/schedule every 3 days\n" +
+				"/schedule every 3 days at 09:00\n" +
+				"/schedule every 5 minutes\n" +
+				"/schedule cron 0 9 * * *",
+		);
+	}
 
 	const group = await getGroup({ ctx });
 	const validateResult = validateSchedule(schedule, group.timezone);
@@ -53,27 +59,32 @@ export const schedule = async (ctx: CommandCtx) => {
 		return await ctx.reply(
 			"Annan kunnon intervalli tai cron.\nEsim:\n" +
 				"/schedule every 3 days\n" +
+				"/schedule every 3 days at 09:00\n" +
 				"/schedule every 5 minutes\n" +
 				"/schedule every 3 days 12 hours\n" +
-				"/schedule cron 0 9 */3 * *",
+				"/schedule cron 0 9 * * *",
 		);
 	}
 
-	const nextRunAt = getNextRunAt(schedule, group.timezone);
+	const nextRunAt = getInitialRunAt(schedule, group.timezone);
 
-	await withDbRetry(() => ctx.db
-		.update(groups)
-		.set({
-			scheduleType: schedule.type,
-			scheduleValue: String(schedule.value),
-			nextRunAt,
-		})
-		.where(eq(groups.chatId, chatId)));
+	await withDbRetry(() =>
+		ctx.db
+			.update(groups)
+			.set({
+				scheduleType: schedule.type,
+				scheduleValue: serializeScheduleValue(schedule),
+				nextRunAt,
+			})
+			.where(eq(groups.chatId, chatId)),
+	);
 
 	const fmtResult = formatInTz(nextRunAt, group.timezone);
 
 	if (!fmtResult.success) {
-		return await ctx.reply("Aikataulu asetettu mutta aikavyöhyke on virheellinen!");
+		return await ctx.reply(
+			"Aikataulu asetettu mutta aikavyöhyke on virheellinen!",
+		);
 	} else {
 		return await ctx.reply(
 			`⏰ Aikataulu asetettu ${humanizeSchedule(schedule)}. Seuraava arvonta klo ${fmtResult.time}.`,
