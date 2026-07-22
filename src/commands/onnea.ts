@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getGroup } from "../db/model";
 import { groupMembers } from "../db/schema";
 import type { CommandCtx } from "./context.type";
@@ -30,6 +30,10 @@ export const onnea = async (ctx: CommandCtx) => {
 
 	await ctx.db
 		.update(groupMembers)
-		.set({ congratulationsCount: user.at(0)!.congratulationsCount + 1 })
-		.where(eq(groupMembers.userId, lastPicked));
+		.set({
+			congratulationsCount: sql`${groupMembers.congratulationsCount} + 1`,
+		})
+		.where(
+			and(eq(groupMembers.chatId, chatId), eq(groupMembers.userId, lastPicked)),
+		);
 };

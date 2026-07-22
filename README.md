@@ -1,96 +1,164 @@
 # Snapfluensseri
 
-A Telegram bot built with Cloudflare Workers, Cloudflare D1 (SQLite), and Drizzle ORM to periodically draw a "Snapfluencer" (or other customizable title) from a pool of opted-in group members.
+Snapfluensseri is a self-hosted Telegram bot that periodically picks a
+"Snapfluencer" from a group of opted-in members. It runs on Cloudflare Workers,
+stores state in Cloudflare D1, and supports fixed intervals, local calendar
+schedules, and cron expressions.
 
 ## Features
 
-- **Automated Drawings**: Runs periodically using fixed intervals, timezone-aware calendar intervals, or cron expressions.
-- **Multiple Draw Modes**: Supports standard `random` mode and `double` (Double Trouble) mode with a 10% chance to pick two users.
-- **Timezone Support**: Custom timezone settings so cron schedules execute at the expected local times.
-- **HTML Mention Support**: Mentions winners securely by escaping usernames and using HTML formatting.
-- **High Performance**: Built to run entirely on Cloudflare's serverless edge network using asynchronous, parallel group processing.
+- Automatic, timezone-aware drawings
+- Manual drawings with `/snapfluencer`
+- Opt-in membership with `/join` and `/leave`
+- A standard random mode and a "Double Trouble" mode
+- Atomic schedule claims to prevent duplicate drawings
+- Escaped Telegram HTML mentions
 
----
+The bot's user-facing messages are currently a mix of Finnish and English.
 
 ## Commands
 
-- `/activate` - Initializes the group chat settings and activates drawings.
-- `/deactivate` - Suspends drawings in the group chat.
-- `/join` - Adds yourself to the drawing candidate pool.
-- `/leave` - Removes yourself from the candidate pool.
-- `/status` - Displays current group config, active members, drawing mode, and next scheduled draw time.
-- `/schedule every <duration>` - Configures a fixed-duration frequency.
-- `/schedule every <days> days at <HH:mm>` - Runs every N local calendar days at an exact local time (weeks are also supported).
-- `/schedule cron <expression>` - Configures a cron schedule.
-- `/timezone <tz>` - Sets local timezone for the group (e.g. `Europe/Helsinki`).
-- `/mode <random/double>` - Configures the draw mode.
-- `/snapfluencer` - Triggers a manual draw immediately.
+| Command | Description |
+| --- | --- |
+| `/activate` | Activate drawings in the current group |
+| `/deactivate` | Pause drawings |
+| `/join` | Join the drawing pool |
+| `/leave` | Leave the drawing pool |
+| `/status` | Show the group's configuration and members |
+| `/schedule every <duration>` | Set a fixed-duration schedule |
+| `/schedule every <days> days at <HH:mm>` | Set a local calendar schedule |
+| `/schedule cron <expression>` | Set a cron schedule |
+| `/timezone <tz>` | Set an IANA timezone, such as `Europe/Helsinki` |
+| `/mode <random/double>` | Select the drawing mode |
+| `/snapfluencer` | Run a drawing immediately |
 
----
+## Architecture
 
-## Technical Architecture
-
-The codebase is structured as follows:
-
-```
-├── drizzle/                     # Drizzle migration files and SQL schema snapshots
-├── src/
-│   ├── commands/                # Telegram bot command handlers
-│   │   ├── activate.ts
-│   │   ├── schedule.ts
-│   │   ├── snapfluencer.ts      # Manual pick logic
-│   │   └── ...
-│   ├── db/                      # Database client connection, schema, and models
-│   │   ├── client.ts
-│   │   ├── model.ts             # Zod parsing/validation models
-│   │   └── schema.ts            # Drizzle table schemas
-│   ├── utils/                   # Shared helpers (random pickers, scheduling calculations)
-│   │   ├── random.ts
-│   │   ├── schedule.ts
-│   │   └── telegram.ts
-│   ├── bot.ts                   # Telegraf bot configuration and command routing
-│   ├── cron.ts                  # Scheduled task runner for processing due group draws
-│   ├── index.ts                 # Worker entry point (Fetch & Scheduled handlers)
-│   └── cron.test.ts             # Integration tests
+```text
+Telegram webhook ──> Cloudflare Worker ──> Telegraf commands
+                           │
+Cloudflare cron ───────────┤
+                           └──────────────> Cloudflare D1
 ```
 
-### Entry Points
-- **HTTP Fetch Handler (`src/index.ts`)**: Handles webhooks sent from the Telegram Bot API and routing for simple health checks.
-- **Scheduled Cron Handler (`src/index.ts`)**: Triggers every minute (via wrangler cron triggers) and calls `runCron()` in `src/cron.ts` to atomically claim and process active groups whose `nextRunAt` timestamp has elapsed. Future interval runs stay aligned to the stored schedule cursor rather than processing completion time.
+- `src/index.ts` exposes the health check and authenticated Telegram webhook,
+  and receives Cloudflare scheduled events.
+- `src/bot.ts` configures Telegraf command routing.
+- `src/cron.ts` claims and processes due group drawings.
+- `src/db/` contains the D1 schema and data models.
+- `drizzle/` contains committed database migrations.
 
----
+## Prerequisites
 
-## Development Setup
+- Node.js 22 or newer
+- pnpm 10
+- A Cloudflare account
+- A Telegram bot token from [BotFather](https://t.me/BotFather)
 
-### Prerequisites
-- Node.js & `pnpm`
-- Cloudflare Wrangler CLI (installed automatically as dev dependency)
+## Local development
 
-### Commands
-1. **Install dependencies**:
-   ```bash
+1. Install dependencies:
+
+   ```sh
    pnpm install
    ```
 
-2. **Database Migrations (Local D1)**:
-   ```bash
-   pnpm run db:generate
+2. Create `.dev.vars` (it is ignored by Git):
+
+   ```dotenv
+   BOT_TOKEN=your-telegram-bot-token
+   TG_WEBHOOK_SECRET=use-a-long-random-value
+   ```
+
+3. Apply the migrations to the local D1 database:
+
+   ```sh
    pnpm run db:migrate:local
    ```
 
-3. **Start local dev server**:
-   ```bash
+4. Start Wrangler:
+
+   ```sh
    pnpm run dev
    ```
-   *Note: This starts Wrangler with local D1 database bindings and scheduled-event testing capabilities.*
 
-4. **Run tests**:
-   ```bash
-   pnpm test
-   ```
+The local server exposes `GET /health`. Telegram cannot call a localhost
+webhook directly; use a tunnel with HTTPS if you want to exercise real Telegram
+updates locally.
 
-5. **Deploy to Cloudflare Workers**:
-   ```bash
-   pnpm run db:migrate:remote
-   pnpm run deploy
-   ```
+Before opening a pull request, run the same checks as CI:
+
+```sh
+pnpm run check
+```
+
+## Deploying your own instance
+
+The committed `database_id` identifies the maintainer's D1 database; it is not
+an authentication credential. If you are deploying a fork, first create your
+own D1 database:
+
+```sh
+pnpm exec wrangler d1 create snapfluencer
+```
+
+Replace the `database_id` in `wrangler.jsonc` with the ID returned by Wrangler.
+The binding keeps `remote: false`, so normal local development still uses the
+local database under `.wrangler/`.
+
+For the first production deployment, authenticate with `pnpm exec wrangler
+login`, then store both secrets in Cloudflare. Use the same webhook secret in
+the final Telegram API call below.
+
+```sh
+pnpm exec wrangler secret put BOT_TOKEN
+pnpm exec wrangler secret put TG_WEBHOOK_SECRET
+```
+
+Apply outstanding production migrations before deploying code that depends on
+them, then deploy the Worker:
+
+```sh
+pnpm run check
+pnpm run db:migrate:remote
+pnpm run deploy
+```
+
+For later code-only releases with no schema changes, `pnpm run deploy` is
+enough. Wrangler uploads the Worker and applies the bindings from
+`wrangler.jsonc`; previously stored secrets remain configured. Review generated
+SQL before applying any new remote migration.
+
+Finally, register the deployed endpoint with Telegram. This only needs to be
+repeated when the Worker URL or webhook secret changes:
+
+```sh
+curl --request POST \
+  "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
+  --data-urlencode "url=https://<YOUR_WORKER>.workers.dev/webhook" \
+  --data-urlencode "secret_token=<YOUR_WEBHOOK_SECRET>"
+```
+
+Never commit `.dev.vars`, bot tokens, webhook secrets, Cloudflare API tokens, or
+production database exports.
+
+## Data and privacy
+
+An operator-hosted instance stores Telegram chat IDs and user IDs, usernames,
+first names, opt-in state, drawing counters, and group scheduling settings. The
+bot does not need to store message contents. Full Telegram updates are not
+logged by the application.
+
+Operators are responsible for telling group members how their instance handles
+data, limiting access to Cloudflare logs and D1, and complying with applicable
+privacy requirements. `/leave` opts a member out of drawings; it does not erase
+their stored record.
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow. Please
+report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Snapfluensseri is available under the [MIT License](LICENSE).

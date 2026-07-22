@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "./random";
-import { pickRandom } from "./random"; // Adjust path
+import { pickRandom } from "./random";
 
 describe("Draw Logic: pickRandom and Multi-Pick", () => {
-	const userA: User = {
-		userId: 100,
-		firstName: "Alice",
+	const makeUser = (userId: number, firstName: string): User => ({
+		chatId: 1,
+		userId,
+		username: null,
+		firstName,
+		lastSeenAt: null,
+		snapCount: 0,
+		congratulationsCount: 0,
 		isOptedIn: true,
-	} as any;
-	const userB: User = { userId: 101, firstName: "Bob", isOptedIn: true } as any;
-	const userC: User = {
-		userId: 102,
-		firstName: "Charlie",
-		isOptedIn: true,
-	} as any;
+		createdAt: new Date(0),
+		updatedAt: new Date(0),
+	});
+	const userA = makeUser(100, "Alice");
+	const userB = makeUser(101, "Bob");
+	const userC = makeUser(102, "Charlie");
 
 	beforeEach(() => {
 		vi.spyOn(Math, "random").mockReturnValue(0.5); // Predictable middle-of-the-road pick
