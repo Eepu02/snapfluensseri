@@ -13,10 +13,13 @@ export default {
 
 		if (req.method === "POST" && url.pathname === "/webhook") {
 			const secret = env.TG_WEBHOOK_SECRET;
-			if (secret) {
-				const got = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
-				if (got !== secret) return new Response("forbidden", { status: 403 });
+			if (!secret) {
+				console.error("[CONFIG ERROR]: TG_WEBHOOK_SECRET is not configured");
+				return new Response("service unavailable", { status: 503 });
 			}
+
+			const got = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+			if (got !== secret) return new Response("forbidden", { status: 403 });
 
 			const bot = await getBot(env);
 			try {
