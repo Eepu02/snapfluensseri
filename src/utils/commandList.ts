@@ -10,5 +10,4 @@ export const commandList =
 	`/join - Liity arvontaan\n` +
 	`/leave - Poistu arvonnasta\n` +
 	`/status - Näytä nykyinen tila\n` +
-	`/snapfluencer - Arvo Snapfluensseri\n\n` +
-	`Lähdekoodi: https://github.com/Eepu02/snapfluensseri\n`;
+	`/snapfluencer - Arvo Snapfluensseri\n`;

@@ -11,6 +11,10 @@ import { status } from "./commands/status";
 import { timezone } from "./commands/timezone";
 import { type DB, type Env, getDb } from "./db/client";
 import { commandList } from "./utils/commandList";
+import { formatErrorMessage } from "./utils/helpers";
+
+const botDescription =
+	"Arpoo ryhmän seuraavan Snapfluensserin. Lähdekoodi: https://github.com/Eepu02/snapfluensseri";
 
 export interface BotContext extends Context {
 	db: DB;
@@ -25,6 +29,13 @@ export interface BotContext extends Context {
  */
 async function setupBot(env: Env) {
 	const bot = new Telegraf<BotContext>(env.BOT_TOKEN);
+	try {
+		await bot.telegram.setMyDescription(botDescription);
+	} catch (error) {
+		console.error(
+			`[BOT CONFIG ERROR]: Unable to update bot description: ${formatErrorMessage(error)}`,
+		);
+	}
 
 	bot.use(async (ctx, next) => {
 		ctx.db = getDb(env);
