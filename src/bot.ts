@@ -1,5 +1,4 @@
 import { type Context, Telegraf } from "telegraf";
-import { message } from "telegraf/filters";
 import { activate } from "./commands/activate";
 import { deactivate } from "./commands/deactivate";
 import { join } from "./commands/join";
@@ -11,9 +10,11 @@ import { snapfluencer } from "./commands/snapfluencer";
 import { status } from "./commands/status";
 import { timezone } from "./commands/timezone";
 import { type DB, type Env, getDb } from "./db/client";
-import { groupMembers } from "./db/schema";
 import { commandList } from "./utils/commandList";
-import { withDbRetry } from "./utils/helpers";
+import { formatErrorMessage } from "./utils/helpers";
+
+const botDescription =
+	"Arpoo ryhmän seuraavan Snapfluensserin. Lähdekoodi: https://github.com/Eepu02/snapfluensseri";
 
 export interface BotContext extends Context {
 	db: DB;
@@ -21,23 +22,24 @@ export interface BotContext extends Context {
 
 /**
  * Initializes and configures the Telegraf bot instance.
- * Sets up database context middleware, logging middleware, command routing, and message tracking.
- * 
+ * Sets up database context middleware and command routing.
+ *
  * @param env - The Cloudflare Worker environment configuration.
  * @returns A fully configured Telegraf bot instance.
  */
 async function setupBot(env: Env) {
 	const bot = new Telegraf<BotContext>(env.BOT_TOKEN);
+	try {
+		await bot.telegram.setMyDescription(botDescription);
+	} catch (error) {
+		console.error(
+			`[BOT CONFIG ERROR]: Unable to update bot description: ${formatErrorMessage(error)}`,
+		);
+	}
 
 	bot.use(async (ctx, next) => {
 		ctx.db = getDb(env);
 		await next(); // runs next middleware
-	});
-
-	// Debugging middleware to log incoming updates
-	bot.use(async (ctx, next) => {
-		console.log(`[UPDATE RECEIVED]: ${JSON.stringify(ctx.update)}`);
-		await next();
 	});
 
 	/**
@@ -92,8 +94,6 @@ async function setupBot(env: Env) {
 	// Intentionally not in help menu
 	bot.command("onnea", onnea);
 
-
-
 	return bot;
 }
 
@@ -102,7 +102,7 @@ let cachedBot: Telegraf<BotContext> | null = null;
 /**
  * Retrieves the singleton/cached Telegraf bot instance.
  * If the instance does not exist, setupBot is called to initialize it.
- * 
+ *
  * @param env - The Cloudflare Worker environment configuration.
  * @returns The cached or newly created Telegraf bot instance.
  */

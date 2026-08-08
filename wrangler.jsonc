@@ -7,16 +7,12 @@
 	"name": "snapfluencer",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-09-27",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
+	"compatibility_flags": ["nodejs_compat"],
 	"observability": {
 		"enabled": true
 	},
 	"triggers": {
-		"crons": [
-			"* * * * *"
-		]
+		"crons": ["* * * * *"]
 	},
 	"d1_databases": [
 		{
@@ -24,12 +20,9 @@
 			"database_name": "snapfluencer",
 			"database_id": "7e5d3ee1-3923-4d58-a106-090e3d7556bd",
 			"migrations_dir": "drizzle",
-			"remote": true
+			"remote": false
 		}
-	],
-	"vars": {
-		"ENVIRONMENT": "production"
-	}
+	]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

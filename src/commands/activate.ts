@@ -29,7 +29,5 @@ export const activate = async (ctx: CommandCtx) => {
 		console.error(`[BOT ERROR]: ${formatErrorMessage(e)}`);
 	}
 
-	await ctx.reply(
-		`Snapfluensseri! Mennään!\n\n` + commandList,
-	);
+	await ctx.reply(`Snapfluensseri! Mennään!\n\n${commandList}`);
 };
