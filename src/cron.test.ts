@@ -252,6 +252,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
