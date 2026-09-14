@@ -135,4 +135,59 @@ describe("claimRotationPicks", () => {
 		expect(picks).toEqual([charlie]);
 		expect(db.update).toHaveBeenCalledTimes(3);
 	});
+
+	it("lets a new member join the current cycle immediately", async () => {
+		const sets: object[] = [];
+		const alice = makeUser(100, 4);
+		const bob = makeUser(101, 4);
+		const newcomer = makeUser(102, 0);
+		const db = {
+			select: vi
+				.fn()
+				.mockReturnValueOnce(groupSelect(4, 101))
+				.mockReturnValueOnce(memberSelect([alice, bob, newcomer]))
+				.mockReturnValueOnce(cycleGuardSelect()),
+			update: vi
+				.fn()
+				.mockReturnValueOnce(returningUpdate(sets, [{ userId: 102 }]))
+				.mockReturnValueOnce(plainUpdate(sets)),
+		};
+
+		const picks = await claimRotationPicks(db as never, 1, 1);
+
+		expect(picks).toEqual([newcomer]);
+		expect(sets).toContainEqual({ lastDrawnCycle: 4 });
+	});
+
+	it("crosses a cycle boundary during a double draw without duplicates", async () => {
+		const sets: object[] = [];
+		const alice = makeUser(100, 1);
+		const bob = makeUser(101, 1);
+		const charlieBeforePick = makeUser(102, 0);
+		const charlieAfterPick = makeUser(102, 1);
+		const db = {
+			select: vi
+				.fn()
+				.mockReturnValueOnce(groupSelect(1, 101))
+				.mockReturnValueOnce(memberSelect([alice, bob, charlieBeforePick]))
+				.mockReturnValueOnce(cycleGuardSelect())
+				.mockReturnValueOnce(groupSelect(1, 102))
+				.mockReturnValueOnce(memberSelect([alice, bob, charlieAfterPick]))
+				.mockReturnValueOnce(cycleGuardSelect()),
+			update: vi
+				.fn()
+				.mockReturnValueOnce(returningUpdate(sets, [{ userId: 102 }]))
+				.mockReturnValueOnce(plainUpdate(sets))
+				.mockReturnValueOnce(returningUpdate(sets, [{ rotationCycle: 2 }]))
+				.mockReturnValueOnce(returningUpdate(sets, [{ userId: 100 }]))
+				.mockReturnValueOnce(plainUpdate(sets)),
+		};
+
+		const picks = await claimRotationPicks(db as never, 1, 2);
+
+		expect(picks).toEqual([charlieBeforePick, alice]);
+		expect(new Set(picks.map((pick) => pick.userId)).size).toBe(2);
+		expect(sets).toContainEqual({ lastDrawnCycle: 1 });
+		expect(sets).toContainEqual({ lastDrawnCycle: 2 });
+	});
 });
