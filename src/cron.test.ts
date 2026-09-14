@@ -216,6 +216,37 @@ describe("runCron Integration Tests", () => {
 		expect(mockDb.delete).toHaveBeenCalled();
 	});
 
+	it("should not record a winner when the announcement fails", async () => {
+		const mockGroup = {
+			chatId: 1000,
+			isActive: true,
+			scheduleType: "interval" as const,
+			scheduleValue: "3600",
+			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: null,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		mockDb.where.mockResolvedValueOnce([mockGroup]);
+		mockDb.where.mockResolvedValueOnce([{ userId: 100, firstName: "Alice" }]);
+		mockSendMessage.mockRejectedValueOnce(new Error("Telegram unavailable"));
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await runCron(mockEnv, scheduledTime);
+
+		// Only the schedule claim is persisted. No snap count or last-winner
+		// update should be made for an announcement nobody could see.
+		expect(mockDb.update).toHaveBeenCalledTimes(1);
+		expect(mockDb.set).toHaveBeenCalledTimes(1);
+		expect(mockDb.set).toHaveBeenCalledWith({
+			nextRunAt: new Date("2024-01-01T13:00:00Z"),
+		});
+		expect(mockDb.delete).not.toHaveBeenCalled();
+	});
+
 	it("should properly escape HTML in usernames to prevent crashes", async () => {
 		// GIVEN: A user with HTML characters in their name
 		const mockGroup = {

@@ -171,6 +171,10 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 						return;
 					}
 					console.error(`[Cron] Send failed for ${group.chatId}:`, err);
+					// The draw was not visible to the group, so do not record its
+					// winner or affect the cooldown. The schedule claim remains
+					// advanced to avoid retrying the same occurrence.
+					return;
 				}
 
 				// 5. Atomic Updates
