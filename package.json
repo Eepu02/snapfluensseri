@@ -42,11 +42,11 @@
 		"wrangler": "4.112.0"
 	},
 	"dependencies": {
-		"cron-parser": "5.4.0",
+		"cron-parser": "5.10.0",
 		"drizzle-orm": "0.45.2",
 		"drizzle-zod": "0.8.3",
 		"luxon": "3.7.2",
 		"telegraf": "4.16.3",
-		"zod": "4.3.5"
+		"zod": "4.5.4"
 	}
 }
