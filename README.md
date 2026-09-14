@@ -115,19 +115,25 @@ pnpm exec wrangler secret put BOT_TOKEN
 pnpm exec wrangler secret put TG_WEBHOOK_SECRET
 ```
 
-Apply outstanding production migrations before deploying code that depends on
-them, then deploy the Worker:
+Pushes to `main` are deployed by Cloudflare Workers Builds. The configured
+build command runs the full check suite, and the production deploy command
+runs `pnpm run deploy:production`. That script applies outstanding D1
+migrations before deploying the Worker, so a failed check or migration stops
+the release before new code is deployed. Non-production branches only upload
+preview versions and do not run remote migrations.
+
+To perform the same release manually, apply outstanding production migrations
+before deploying code that depends on them:
 
 ```sh
 pnpm run check
-pnpm run db:migrate:remote
-pnpm run deploy
+pnpm run deploy:production
 ```
 
-For later code-only releases with no schema changes, `pnpm run deploy` is
-enough. Wrangler uploads the Worker and applies the bindings from
-`wrangler.jsonc`; previously stored secrets remain configured. Review generated
-SQL before applying any new remote migration.
+When there are no outstanding migrations, the migration command is a no-op.
+Wrangler uploads the Worker and applies the bindings from `wrangler.jsonc`;
+previously stored secrets remain configured. Review generated SQL before
+applying any new remote migration.
 
 Finally, register the deployed endpoint with Telegram. This only needs to be
 repeated when the Worker URL or webhook secret changes:
