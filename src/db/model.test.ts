@@ -8,6 +8,7 @@ const baseGroup = {
 	nextRunAt: new Date("2026-07-24T06:00:00Z"),
 	lastPickedUserId: null,
 	drawMode: "random" as const,
+	rotationCycle: 1,
 	createdAt: new Date("2026-07-01T00:00:00Z"),
 	updatedAt: new Date("2026-07-01T00:00:00Z"),
 };

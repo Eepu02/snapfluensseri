@@ -11,6 +11,7 @@ describe("Draw Logic: pickRandom and Multi-Pick", () => {
 		lastSeenAt: null,
 		snapCount: 0,
 		congratulationsCount: 0,
+		lastDrawnCycle: 0,
 		isOptedIn: true,
 		createdAt: new Date(0),
 		updatedAt: new Date(0),
@@ -81,6 +82,38 @@ describe("Draw Logic: pickRandom and Multi-Pick", () => {
 	describe("Empty Candidates", () => {
 		it("should return null gracefully", () => {
 			expect(pickRandom([], [100])).toBeNull();
+		});
+	});
+
+	describe("Distribution", () => {
+		it("maps the random interval to every candidate boundary", () => {
+			expect(pickRandom([userA, userB, userC], [], () => 0)).toEqual(userA);
+			expect(
+				pickRandom([userA, userB, userC], [], () => 1 - Number.EPSILON),
+			).toEqual(userC);
+		});
+
+		it("stays approximately uniform with a seeded random sequence", () => {
+			let state = 0x12345678;
+			const seededRandom = () => {
+				state = (Math.imul(1_664_525, state) + 1_013_904_223) >>> 0;
+				return state / 2 ** 32;
+			};
+			const counts = new Map<number, number>();
+			const draws = 60_000;
+
+			for (let draw = 0; draw < draws; draw++) {
+				const picked = pickRandom([userA, userB, userC], [], seededRandom);
+				if (!picked) throw new Error("Expected a candidate");
+				counts.set(picked.userId, (counts.get(picked.userId) ?? 0) + 1);
+			}
+
+			const expected = draws / 3;
+			for (const user of [userA, userB, userC]) {
+				expect(
+					Math.abs((counts.get(user.userId) ?? 0) - expected),
+				).toBeLessThan(expected * 0.03);
+			}
 		});
 	});
 });
