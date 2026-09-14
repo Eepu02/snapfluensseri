@@ -1,12 +1,14 @@
 import type { groupMembers } from "../db/schema";
 
 export type User = typeof groupMembers.$inferSelect;
+
 /**
  * Robust random picker that excludes specific IDs.
  */
 export function pickRandom(
 	candidates: User[],
 	excludeIds: User["userId"][] = [],
+	random: () => number = Math.random,
 ): User | null {
 	const eligible = candidates.filter(
 		(user) => !excludeIds.includes(user.userId),
@@ -17,5 +19,5 @@ export function pickRandom(
 	const pool = eligible.length > 0 ? eligible : candidates;
 
 	if (pool.length === 0) return null;
-	return pool[Math.floor(Math.random() * pool.length)];
+	return pool[Math.floor(random() * pool.length)];
 }

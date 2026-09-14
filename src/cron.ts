@@ -2,9 +2,9 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { Telegraf, TelegramError } from "telegraf";
 import { type Env, getDb } from "./db/client";
 import { parsedGroupModel } from "./db/model";
+import { claimRotationPicks } from "./db/rotation";
 import { groupMembers, groups } from "./db/schema";
 import { formatErrorMessage, withDbRetry } from "./utils/helpers";
-import { pickRandom } from "./utils/random";
 import { getNextFutureRunAt } from "./utils/schedule";
 import { escapeHTML, formatMention } from "./utils/telegram";
 
@@ -47,8 +47,6 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 			try {
 				if (!group.nextRunAt) return;
 				const previousRunAt = group.nextRunAt;
-
-				// 1. Get eligible members
 				const members = await db
 					.select()
 					.from(groupMembers)
@@ -104,25 +102,17 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 				}
 
 				// 2. Selection Logic
-				const picked = pickRandom(
-					members,
-					group.lastPickedUserId ? [group.lastPickedUserId] : [],
+				const doubleDraw = group.drawMode === "double";
+				const roll = Math.random() < 0.1;
+				const [picked, secondPick = null] = await claimRotationPicks(
+					db,
+					group.chatId,
+					doubleDraw && roll && members.length > 1 ? 2 : 1,
 				);
 
 				if (!picked) {
 					await unableToPick();
 					return;
-				}
-
-				let secondPick = null;
-				const doubleDraw = group.drawMode === "double";
-				const roll = Math.random() < 0.1;
-				if (doubleDraw && roll && members.length > 1) {
-					// Exclude both the current primary pick AND the previous run's winner
-					secondPick = pickRandom(
-						members,
-						[picked.userId, group.lastPickedUserId].filter((u) => u !== null),
-					);
 				}
 
 				// 3. Prepare Message (with HTML escaping)
@@ -194,17 +184,6 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 
 				await increment(picked.userId);
 				if (secondPick) await increment(secondPick.userId);
-
-				// The schedule cursor was advanced by the atomic claim above; only the
-				// winner state remains to update here.
-				await withDbRetry(() =>
-					db
-						.update(groups)
-						.set({
-							lastPickedUserId: picked.userId,
-						})
-						.where(eq(groups.chatId, group.chatId)),
-				);
 			} catch (err) {
 				console.error(`[Cron] Error processing group ${group.chatId}:`, err);
 			}
