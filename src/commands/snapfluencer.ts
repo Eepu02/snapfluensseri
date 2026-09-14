@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import { groupMembers, groups } from "../db/schema";
-import { pickRandom } from "../utils/random";
+import { pickRotation } from "../utils/random";
 import { formatMention } from "../utils/telegram";
 import type { CommandCtx } from "./context.type";
 
@@ -27,10 +27,12 @@ export const snapfluencer = async (ctx: CommandCtx) => {
 		.where(eq(groups.chatId, chatId))
 		.limit(1);
 
-	const picked = pickRandom(
+	const selection = pickRotation(
 		members,
-		group[0]?.lastPickedUserId ? [group[0].lastPickedUserId] : [],
+		1,
+		group[0]?.lastPickedUserId ?? null,
 	);
+	const picked = selection.picks[0];
 
 	if (!picked) {
 		return await ctx.reply("Ei onnannu.");
@@ -44,6 +46,29 @@ export const snapfluencer = async (ctx: CommandCtx) => {
 	const msgText = `🎉 ${mention} on snapfluensseri!`;
 
 	await ctx.sendMessage(msgText, { parse_mode: "HTML" });
+
+	if (selection.resetCycle) {
+		await ctx.db
+			.update(groupMembers)
+			.set({ drawnThisCycle: false })
+			.where(
+				and(
+					eq(groupMembers.chatId, chatId),
+					eq(groupMembers.isOptedIn, true),
+					notInArray(groupMembers.userId, selection.drawnUserIds),
+				),
+			);
+	} else {
+		await ctx.db
+			.update(groupMembers)
+			.set({ drawnThisCycle: true })
+			.where(
+				and(
+					eq(groupMembers.chatId, chatId),
+					eq(groupMembers.userId, picked.userId),
+				),
+			);
+	}
 
 	await ctx.db
 		.update(groups)

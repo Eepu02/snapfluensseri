@@ -97,6 +97,37 @@ describe("runCron Integration Tests", () => {
 
 		// Verify snapCount update was triggered
 		expect(mockDb.update).toHaveBeenCalled();
+		expect(mockDb.set).toHaveBeenCalledWith({ drawnThisCycle: true });
+	});
+
+	it("resets the rotation after every member has been drawn", async () => {
+		const mockGroup = {
+			chatId: 124,
+			isActive: true,
+			scheduleType: "cron" as const,
+			scheduleValue: "0 12 * * *",
+			timezone: "UTC",
+			nextRunAt: new Date(scheduledTime),
+			lastPickedUserId: 100,
+			drawMode: "random" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const mockMembers = [
+			{ userId: 100, firstName: "Alice", drawnThisCycle: true },
+			{ userId: 101, firstName: "Bob", drawnThisCycle: true },
+			{ userId: 102, firstName: "Charlie", drawnThisCycle: true },
+		];
+
+		mockDb.where.mockResolvedValueOnce([mockGroup]);
+		mockDb.where.mockResolvedValueOnce(mockMembers);
+		vi.spyOn(Math, "random").mockReturnValue(0);
+
+		await runCron(mockEnv, scheduledTime);
+
+		expect(mockSendMessage.mock.calls[0][1]).toContain("Bob");
+		expect(mockDb.set).toHaveBeenCalledWith({ drawnThisCycle: false });
+		expect(mockDb.set).not.toHaveBeenCalledWith({ drawnThisCycle: true });
 	});
 
 	it("should not process a due group when another worker already claimed it", async () => {

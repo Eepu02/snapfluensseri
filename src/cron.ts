@@ -1,10 +1,10 @@
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, notInArray, sql } from "drizzle-orm";
 import { Telegraf, TelegramError } from "telegraf";
 import { type Env, getDb } from "./db/client";
 import { parsedGroupModel } from "./db/model";
 import { groupMembers, groups } from "./db/schema";
 import { formatErrorMessage, withDbRetry } from "./utils/helpers";
-import { pickRandom } from "./utils/random";
+import { pickRotation } from "./utils/random";
 import { getNextFutureRunAt } from "./utils/schedule";
 import { escapeHTML, formatMention } from "./utils/telegram";
 
@@ -104,25 +104,18 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 				}
 
 				// 2. Selection Logic
-				const picked = pickRandom(
+				const doubleDraw = group.drawMode === "double";
+				const roll = Math.random() < 0.1;
+				const selection = pickRotation(
 					members,
-					group.lastPickedUserId ? [group.lastPickedUserId] : [],
+					doubleDraw && roll && members.length > 1 ? 2 : 1,
+					group.lastPickedUserId,
 				);
+				const [picked, secondPick = null] = selection.picks;
 
 				if (!picked) {
 					await unableToPick();
 					return;
-				}
-
-				let secondPick = null;
-				const doubleDraw = group.drawMode === "double";
-				const roll = Math.random() < 0.1;
-				if (doubleDraw && roll && members.length > 1) {
-					// Exclude both the current primary pick AND the previous run's winner
-					secondPick = pickRandom(
-						members,
-						[picked.userId, group.lastPickedUserId].filter((u) => u !== null),
-					);
 				}
 
 				// 3. Prepare Message (with HTML escaping)
@@ -190,6 +183,36 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 
 				await increment(picked.userId);
 				if (secondPick) await increment(secondPick.userId);
+
+				if (selection.resetCycle) {
+					await withDbRetry(() =>
+						db
+							.update(groupMembers)
+							.set({ drawnThisCycle: false })
+							.where(
+								and(
+									eq(groupMembers.chatId, group.chatId),
+									eq(groupMembers.isOptedIn, true),
+									notInArray(groupMembers.userId, selection.drawnUserIds),
+								),
+							),
+					);
+				} else {
+					await withDbRetry(() =>
+						db
+							.update(groupMembers)
+							.set({ drawnThisCycle: true })
+							.where(
+								and(
+									eq(groupMembers.chatId, group.chatId),
+									inArray(
+										groupMembers.userId,
+										selection.picks.map((pick) => pick.userId),
+									),
+								),
+							),
+					);
+				}
 
 				// The schedule cursor was advanced by the atomic claim above; only the
 				// winner state remains to update here.
