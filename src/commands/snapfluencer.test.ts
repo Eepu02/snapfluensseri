@@ -1,105 +1,53 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { claimRotationPicks } from "../db/rotation";
 import { snapfluencer } from "./snapfluencer";
 
-const mockSet = vi.fn();
-const mockUpdateWhere = vi.fn().mockResolvedValue([]);
+vi.mock("../db/rotation", () => ({
+	claimRotationPicks: vi.fn(),
+}));
 
-const makeDb = (members: object[], lastPickedUserId: number | null) => {
-	const select = vi
-		.fn()
-		.mockReturnValueOnce({
-			from: vi.fn().mockReturnValue({
-				where: vi.fn().mockResolvedValue(members),
-			}),
-		})
-		.mockReturnValueOnce({
-			from: vi.fn().mockReturnValue({
-				where: vi.fn().mockReturnValue({
-					limit: vi.fn().mockResolvedValue([{ lastPickedUserId }]),
-				}),
-			}),
-		});
-
-	mockSet.mockReturnValue({ where: mockUpdateWhere });
-
-	return {
-		select,
-		update: vi.fn().mockReturnValue({ set: mockSet }),
-	};
-};
-
-const makeCtx = (db: ReturnType<typeof makeDb>) => ({
+const ctx = {
 	chat: { id: 1, type: "group" },
 	from: { id: 999 },
-	db,
+	db: {},
 	reply: vi.fn(),
 	sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
-});
+};
 
 describe("snapfluencer fair rotation", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.spyOn(Math, "random").mockReturnValue(0);
 	});
 
-	it("picks and marks an undrawn member", async () => {
-		const db = makeDb(
-			[
-				{
-					userId: 100,
-					username: "alice",
-					firstName: "Alice",
-					drawnThisCycle: true,
-				},
-				{
-					userId: 101,
-					username: "bob",
-					firstName: "Bob",
-					drawnThisCycle: false,
-				},
-			],
-			100,
-		);
-		const ctx = makeCtx(db);
+	it("announces a member only after the rotation claim resolves", async () => {
+		vi.mocked(claimRotationPicks).mockResolvedValue([
+			{
+				userId: 101,
+				username: "bob",
+				firstName: "Bob",
+			} as never,
+		]);
 
 		await snapfluencer(ctx as never);
 
+		expect(claimRotationPicks).toHaveBeenCalledWith(ctx.db, 1, 1);
 		expect(ctx.sendMessage).toHaveBeenCalledWith(
 			expect.stringContaining("@bob"),
 			{ parse_mode: "HTML" },
 		);
-		expect(mockSet).toHaveBeenCalledWith({ drawnThisCycle: true });
-		expect(mockSet).toHaveBeenCalledWith({ lastPickedUserId: 101 });
+		expect(
+			vi.mocked(claimRotationPicks).mock.invocationCallOrder[0],
+		).toBeLessThan(ctx.sendMessage.mock.invocationCallOrder[0]);
 	});
 
-	it("resets the cycle while keeping the new winner marked", async () => {
-		const db = makeDb(
-			[
-				{
-					userId: 100,
-					username: "alice",
-					firstName: "Alice",
-					drawnThisCycle: true,
-				},
-				{
-					userId: 101,
-					username: "bob",
-					firstName: "Bob",
-					drawnThisCycle: true,
-				},
-			],
-			100,
-		);
-		const ctx = makeCtx(db);
+	it("reports an empty opted-in group", async () => {
+		vi.mocked(claimRotationPicks).mockResolvedValue([]);
 
 		await snapfluencer(ctx as never);
 
-		expect(ctx.sendMessage).toHaveBeenCalledWith(
-			expect.stringContaining("@bob"),
-			{ parse_mode: "HTML" },
+		expect(ctx.sendMessage).not.toHaveBeenCalled();
+		expect(ctx.reply).toHaveBeenCalledWith(
+			"Ei soveltuvia jäseniä. Tee /join liittyäksesi.",
 		);
-		expect(mockSet).toHaveBeenCalledWith({ drawnThisCycle: false });
-		expect(mockSet).not.toHaveBeenCalledWith({ drawnThisCycle: true });
-		expect(mockSet).toHaveBeenCalledWith({ lastPickedUserId: 101 });
 	});
 });

@@ -1,10 +1,10 @@
-import { and, eq, inArray, lte, notInArray, sql } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 import { Telegraf, TelegramError } from "telegraf";
 import { type Env, getDb } from "./db/client";
 import { parsedGroupModel } from "./db/model";
+import { claimRotationPicks } from "./db/rotation";
 import { groupMembers, groups } from "./db/schema";
 import { formatErrorMessage, withDbRetry } from "./utils/helpers";
-import { pickRotation } from "./utils/random";
 import { getNextFutureRunAt } from "./utils/schedule";
 import { escapeHTML, formatMention } from "./utils/telegram";
 
@@ -47,8 +47,6 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 			try {
 				if (!group.nextRunAt) return;
 				const previousRunAt = group.nextRunAt;
-
-				// 1. Get eligible members
 				const members = await db
 					.select()
 					.from(groupMembers)
@@ -106,12 +104,11 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 				// 2. Selection Logic
 				const doubleDraw = group.drawMode === "double";
 				const roll = Math.random() < 0.1;
-				const selection = pickRotation(
-					members,
+				const [picked, secondPick = null] = await claimRotationPicks(
+					db,
+					group.chatId,
 					doubleDraw && roll && members.length > 1 ? 2 : 1,
-					group.lastPickedUserId,
 				);
-				const [picked, secondPick = null] = selection.picks;
 
 				if (!picked) {
 					await unableToPick();
@@ -183,47 +180,6 @@ export async function runCron(env: Env, scheduledTimeMs: number) {
 
 				await increment(picked.userId);
 				if (secondPick) await increment(secondPick.userId);
-
-				if (selection.resetCycle) {
-					await withDbRetry(() =>
-						db
-							.update(groupMembers)
-							.set({ drawnThisCycle: false })
-							.where(
-								and(
-									eq(groupMembers.chatId, group.chatId),
-									eq(groupMembers.isOptedIn, true),
-									notInArray(groupMembers.userId, selection.drawnUserIds),
-								),
-							),
-					);
-				} else {
-					await withDbRetry(() =>
-						db
-							.update(groupMembers)
-							.set({ drawnThisCycle: true })
-							.where(
-								and(
-									eq(groupMembers.chatId, group.chatId),
-									inArray(
-										groupMembers.userId,
-										selection.picks.map((pick) => pick.userId),
-									),
-								),
-							),
-					);
-				}
-
-				// The schedule cursor was advanced by the atomic claim above; only the
-				// winner state remains to update here.
-				await withDbRetry(() =>
-					db
-						.update(groups)
-						.set({
-							lastPickedUserId: picked.userId,
-						})
-						.where(eq(groups.chatId, group.chatId)),
-				);
 			} catch (err) {
 				console.error(`[Cron] Error processing group ${group.chatId}:`, err);
 			}

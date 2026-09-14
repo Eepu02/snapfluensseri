@@ -19,6 +19,7 @@ export const groups = sqliteTable("groups", {
 	nextRunAt: integer("next_run_at", { mode: "timestamp" }),
 	lastPickedUserId: integer("last_picked_user_id"),
 	drawMode: text("draw_mode").notNull().default("random"),
+	rotationCycle: integer("rotation_cycle").notNull().default(0),
 
 	createdAt: integer("created_at", { mode: "timestamp" })
 		.notNull()
@@ -39,9 +40,7 @@ export const groupMembers = sqliteTable(
 		lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
 		snapCount: integer("snap_count").notNull().default(0),
 		congratulationsCount: integer("congratulations_count").notNull().default(0),
-		drawnThisCycle: integer("drawn_this_cycle", { mode: "boolean" })
-			.notNull()
-			.default(false),
+		lastDrawnCycle: integer("last_drawn_cycle").notNull().default(0),
 
 		isOptedIn: integer("is_opted_in", { mode: "boolean" })
 			.notNull()

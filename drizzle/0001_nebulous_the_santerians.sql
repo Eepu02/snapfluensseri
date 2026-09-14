@@ -1,1 +1,0 @@
-ALTER TABLE `group_members` ADD `drawn_this_cycle` integer DEFAULT false NOT NULL;

@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCron } from "./cron"; // Adjust this path to your cron file
 import type { Env } from "./db/client";
 import * as dbClient from "./db/client";
+import { claimRotationPicks } from "./db/rotation";
 
 // 1. Mock Telegraf
 // Variables used in vi.mock must be prefixed with 'mock'
 const mockSendMessage = vi.fn().mockResolvedValue({ message_id: 123 });
+const { mockClaimRotationPicks } = vi.hoisted(() => ({
+	mockClaimRotationPicks: vi.fn(),
+}));
 
 vi.mock("telegraf", () => {
 	return {
@@ -33,6 +37,10 @@ vi.mock("telegraf", () => {
 	};
 });
 
+vi.mock("./db/rotation", () => ({
+	claimRotationPicks: mockClaimRotationPicks,
+}));
+
 // 2. Mock Drizzle Database
 // We create a "chainable" mock to handle db.select().from().where()
 const mockDb = {
@@ -55,6 +63,9 @@ describe("runCron Integration Tests", () => {
 		vi.spyOn(dbClient, "getDb").mockReturnValue(
 			mockDb as unknown as ReturnType<typeof dbClient.getDb>,
 		);
+		vi.mocked(claimRotationPicks).mockResolvedValue([
+			{ userId: 100, firstName: "Alice" } as never,
+		]);
 	});
 
 	it("should perform a standard draw excluding the last winner", async () => {
@@ -68,6 +79,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: 123,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -79,6 +91,7 @@ describe("runCron Integration Tests", () => {
 
 		mockDb.where.mockResolvedValueOnce([mockGroup]); // Result for dueGroups
 		mockDb.where.mockResolvedValueOnce(mockMembers); // Result for members
+		vi.mocked(claimRotationPicks).mockResolvedValue([mockMembers[1] as never]);
 
 		// Force Math.random to skip Double Trouble (> 0.1)
 		vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -97,37 +110,7 @@ describe("runCron Integration Tests", () => {
 
 		// Verify snapCount update was triggered
 		expect(mockDb.update).toHaveBeenCalled();
-		expect(mockDb.set).toHaveBeenCalledWith({ drawnThisCycle: true });
-	});
-
-	it("resets the rotation after every member has been drawn", async () => {
-		const mockGroup = {
-			chatId: 124,
-			isActive: true,
-			scheduleType: "cron" as const,
-			scheduleValue: "0 12 * * *",
-			timezone: "UTC",
-			nextRunAt: new Date(scheduledTime),
-			lastPickedUserId: 100,
-			drawMode: "random" as const,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		};
-		const mockMembers = [
-			{ userId: 100, firstName: "Alice", drawnThisCycle: true },
-			{ userId: 101, firstName: "Bob", drawnThisCycle: true },
-			{ userId: 102, firstName: "Charlie", drawnThisCycle: true },
-		];
-
-		mockDb.where.mockResolvedValueOnce([mockGroup]);
-		mockDb.where.mockResolvedValueOnce(mockMembers);
-		vi.spyOn(Math, "random").mockReturnValue(0);
-
-		await runCron(mockEnv, scheduledTime);
-
-		expect(mockSendMessage.mock.calls[0][1]).toContain("Bob");
-		expect(mockDb.set).toHaveBeenCalledWith({ drawnThisCycle: false });
-		expect(mockDb.set).not.toHaveBeenCalledWith({ drawnThisCycle: true });
+		expect(claimRotationPicks).toHaveBeenCalledWith(mockDb, 123, 1);
 	});
 
 	it("should not process a due group when another worker already claimed it", async () => {
@@ -140,6 +123,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -167,6 +151,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "double" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -178,6 +163,10 @@ describe("runCron Integration Tests", () => {
 
 		mockDb.where.mockResolvedValueOnce([mockGroup]);
 		mockDb.where.mockResolvedValueOnce(mockMembers);
+		vi.mocked(claimRotationPicks).mockResolvedValue([
+			mockMembers[0] as never,
+			mockMembers[1] as never,
+		]);
 
 		// Force Double Trouble (0.05 < 0.1)
 		vi.spyOn(Math, "random").mockReturnValue(0.05);
@@ -201,6 +190,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: 100,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -208,6 +198,7 @@ describe("runCron Integration Tests", () => {
 
 		mockDb.where.mockResolvedValueOnce([mockGroup]);
 		mockDb.where.mockResolvedValueOnce(mockMembers);
+		vi.mocked(claimRotationPicks).mockResolvedValue([mockMembers[0] as never]);
 
 		await runCron(mockEnv, scheduledTime);
 
@@ -231,11 +222,15 @@ describe("runCron Integration Tests", () => {
 				nextRunAt: new Date(scheduledTime),
 				lastPickedUserId: null,
 				drawMode: "random" as const,
+				rotationCycle: 1,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			},
 		]);
 		mockDb.where.mockResolvedValueOnce([{ userId: 100, firstName: "Alice" }]);
+		vi.mocked(claimRotationPicks).mockResolvedValue([
+			{ userId: 100, firstName: "Alice" } as never,
+		]);
 
 		mockSendMessage.mockRejectedValueOnce(
 			new TelegramError({ error_code: 403, description: "Forbidden" }),
@@ -258,6 +253,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -267,6 +263,7 @@ describe("runCron Integration Tests", () => {
 
 		mockDb.where.mockResolvedValueOnce([mockGroup]);
 		mockDb.where.mockResolvedValueOnce(mockMembers);
+		vi.mocked(claimRotationPicks).mockResolvedValue([mockMembers[0] as never]);
 
 		await runCron(mockEnv, scheduledTime);
 
@@ -291,6 +288,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -303,6 +301,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -342,6 +341,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -354,6 +354,7 @@ describe("runCron Integration Tests", () => {
 			nextRunAt: new Date(scheduledTime),
 			lastPickedUserId: null,
 			drawMode: "random" as const,
+			rotationCycle: 1,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
@@ -377,6 +378,7 @@ describe("runCron Integration Tests", () => {
 			if (callCount === 3) return Promise.resolve(mockMembers);
 			return mockDb;
 		});
+		vi.mocked(claimRotationPicks).mockResolvedValue([mockMembers[0] as never]);
 
 		// WHEN: Cron runs
 		await runCron(mockEnv, scheduledTime);
