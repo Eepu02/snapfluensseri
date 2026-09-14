@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       cron-parser:
-        specifier: 5.4.0
-        version: 5.4.0
+        specifier: 5.10.0
+        version: 5.10.0
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2
@@ -897,8 +897,8 @@ packages:
     resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
     engines: {node: '>=18'}
 
-  cron-parser@5.4.0:
-    resolution: {integrity: sha512-HxYB8vTvnQFx4dLsZpGRa0uHp6X3qIzS3ZJgJ9v6l/5TJMgeWQbLkR5yiJ5hOxGbc9+jCADDnydIe15ReLZnJA==}
+  cron-parser@5.10.0:
+    resolution: {integrity: sha512-izNAxJyRWUP8ljBoDSub5WyrVOUlT4SLGShswE7eoRBpp6QUsSycYxLBMJlbshgPBMcPT/nrfgjNY2918ayv2A==}
     engines: {node: '>=18'}
 
   debug@4.4.3:
@@ -1873,7 +1873,7 @@ snapshots:
 
   cookie@1.1.1: {}
 
-  cron-parser@5.4.0:
+  cron-parser@5.10.0:
     dependencies:
       luxon: 3.7.2
 
