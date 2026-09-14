@@ -1,6 +1,5 @@
-import type { Context } from "telegraf";
-import type { Message, Update } from "telegraf/typings/core/types/typegram";
-import type { CommandContextExtn } from "telegraf/typings/telegram-types";
+import type { Context, Types } from "telegraf";
+import type { Message, Update } from "telegraf/types";
 import type { BotContext } from "../bot";
 
 export type CommandCtx = Context<{
@@ -8,4 +7,4 @@ export type CommandCtx = Context<{
 	update_id: number;
 }> &
 	Omit<BotContext, keyof Context<Update>> &
-	CommandContextExtn;
+	Types.CommandContextExtn;
