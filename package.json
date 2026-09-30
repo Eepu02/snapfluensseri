@@ -44,7 +44,7 @@
 	},
 	"dependencies": {
 		"cron-parser": "5.10.0",
-		"drizzle-orm": "0.45.2",
+		"drizzle-orm": "0.45.3",
 		"drizzle-zod": "0.8.3",
 		"luxon": "3.7.2",
 		"telegraf": "4.16.3",
